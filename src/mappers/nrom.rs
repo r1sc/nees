@@ -21,7 +21,7 @@ impl Cartridge for NROM {
         if (address & BIT_13) == BIT_13 {
             ciram[self.nrom_ppu_addr_to_ciram_addr(address) as usize]
         } else {
-            self.ines.chr_rom_banks[0][(address & 0x1fff) as usize]
+            self.ines.chr_rom[(address & 0x1fff) as usize]
         }
     }
 
@@ -32,12 +32,11 @@ impl Cartridge for NROM {
     }
 
     fn cpu_read(&self, address: u16) -> u8 {
-        let bank_no = (address >> 14) & 1;
-        self.ines.prg_rom_banks[if self.ines.prg_rom_banks.len() == 1 { 0 } else { bank_no as usize }][(address & 0x3fff) as usize]
+        self.ines.prg_rom[(address & (if self.ines.prg_rom_size_16k_chunks == 1 { 0x3FFF } else { 0x7FFF })) as usize]
     }
 
-    fn cpu_write(&mut self, address: u16, value: u8) {
-        
+    fn cpu_write(&mut self, _address: u16, _value: u8) {
+        // Do nothing
     }
 
 }

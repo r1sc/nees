@@ -1,5 +1,3 @@
-use crate::ines::INES;
-
 pub trait Cartridge {
     fn ppu_read(&self, address: u16, ciram: &[u8]) -> u8;
     fn ppu_write(&mut self, address: u16, value: u8, ciram: &mut [u8]);

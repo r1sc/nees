@@ -34,13 +34,11 @@ pub struct MOS6502<T: Bus> {
     pub penaltyaddr: bool,
     pub penaltyop: bool,
     pub clockticks: u32,
-    pub addrtable: [fn(&mut Self, &T) -> OperandType; 256],
+    pub addrtable: [fn(&mut Self, &mut T) -> OperandType; 256],
     pub optable: [fn(&mut Self, &OperandType, &mut T); 256],
-    pub nmi: bool,
-    pub irq: bool,
 }
 
-const ticktable: [u32; 256] = [
+const TICKTABLE: [u32; 256] = [
     /*        |  0  |  1  |  2  |  3  |  4  |  5  |  6  |  7  |  8  |  9  |  A  |  B  |  C  |  D  |  E  |  F  |     */
     /* 0 */
     7, 6, 2, 8, 3, 3, 5, 5, 3, 2, 2, 2, 4, 4, 6, 6, /* 0 */
@@ -62,27 +60,27 @@ const ticktable: [u32; 256] = [
 ];
 
 impl<T: Bus> MOS6502<T> {
-    fn read8(&mut self, bus: &T) -> u8 {
+    fn read8(&mut self, bus: &mut T) -> u8 {
         let value = bus.cpu_read(self.pc);
         self.pc = self.pc.wrapping_add(1);
         value
     }
 
-    fn read16(&mut self, bus: &T) -> u16 {
+    fn read16(&mut self, bus: &mut T) -> u16 {
         let lo = self.read8(bus) as u16;
         let hi = self.read8(bus) as u16;
         (hi << 8) | lo
     }
 
-    fn imm(&mut self, bus: &T) -> OperandType {
+    fn imm(&mut self, bus: &mut T) -> OperandType {
         OperandType::Immediate(self.read8(bus))
     }
 
-    fn abso(&mut self, bus: &T) -> OperandType {
+    fn abso(&mut self, bus: &mut T) -> OperandType {
         OperandType::Memory(self.read16(bus))
     }
 
-    fn absx(&mut self, bus: &T) -> OperandType {
+    fn absx(&mut self, bus: &mut T) -> OperandType {
         let mut ea = self.read16(bus);
         let page = ea & 0xFF00;
         ea = ea.wrapping_add(self.x as u16);
@@ -93,7 +91,7 @@ impl<T: Bus> MOS6502<T> {
         OperandType::Memory(ea)
     }
 
-    fn absy(&mut self, bus: &T) -> OperandType {
+    fn absy(&mut self, bus: &mut T) -> OperandType {
         let mut ea = self.read16(bus);
         let page = ea & 0xFF00;
         ea = ea.wrapping_add(self.y as u16);
@@ -105,11 +103,11 @@ impl<T: Bus> MOS6502<T> {
     }
 
     // Implied, no operand
-    fn imp(&mut self, bus: &T) -> OperandType {
+    fn imp(&mut self, _bus: &mut T) -> OperandType {
         OperandType::Implied
     }
 
-    fn ind(&mut self, bus: &T) -> OperandType {
+    fn ind(&mut self, bus: &mut T) -> OperandType {
         let eahelp = self.read16(bus);
         let eahelp2 = (eahelp & 0xFF00) | ((eahelp + 1) & 0x00FF);
         
@@ -119,14 +117,14 @@ impl<T: Bus> MOS6502<T> {
         OperandType::Memory(lo | (hi << 8))
     }
 
-    fn indx(&mut self, bus: &T) -> OperandType {
+    fn indx(&mut self, bus: &mut T) -> OperandType {
         let zp_address = self.read8(bus).wrapping_add(self.x);
         let lo = bus.cpu_read(zp_address as u16) as u16;
         let hi = bus.cpu_read(zp_address.wrapping_add(1) as u16) as u16;
         OperandType::Memory((hi << 8) | lo)
     }
 
-    fn indy(&mut self, bus: &T) -> OperandType {
+    fn indy(&mut self, bus: &mut T) -> OperandType {
         let eahelp = self.read8(bus) as u16;
         let eahelp2 = (eahelp & 0xFF00) | ((eahelp + 1) & 0x00FF);
 
@@ -144,26 +142,26 @@ impl<T: Bus> MOS6502<T> {
         OperandType::Memory(ea)
     }
 
-    fn rel(&mut self, bus: &T) -> OperandType {
+    fn rel(&mut self, bus: &mut T) -> OperandType {
         let reladdr = self.read8(bus) as i8;
         OperandType::Relative(reladdr)
     }
 
-    fn zp(&mut self, bus: &T) -> OperandType {
+    fn zp(&mut self, bus: &mut T) -> OperandType {
         OperandType::Memory(self.read8(bus) as u16)
     }
 
-    fn zpx(&mut self, bus: &T) -> OperandType {
+    fn zpx(&mut self, bus: &mut T) -> OperandType {
         let zp_addr = self.read8(bus);
         OperandType::Memory(zp_addr.wrapping_add(self.x) as u16)
     }
 
-    fn zpy(&mut self, bus: &T) -> OperandType {
+    fn zpy(&mut self, bus: &mut T) -> OperandType {
         let zp_addr = self.read8(bus);
         OperandType::Memory(zp_addr.wrapping_add(self.y) as u16)
     }
 
-    fn acc(&mut self, bus: &T) -> OperandType {
+    fn acc(&mut self, _bus: &mut T) -> OperandType {
         OperandType::Accumulator
     }
 
@@ -177,7 +175,7 @@ impl<T: Bus> MOS6502<T> {
 /* 3 */     Self::rel, Self::indy, Self:: imp, Self::indy, Self:: zpx, Self:: zpx, Self:: zpx, Self:: zpx, Self:: imp, Self::absy, Self:: imp, Self::absy, Self::absx, Self::absx, Self::absx, Self::absx, /* 3 */
 /* 4 */     Self::imp, Self::indx, Self:: imp, Self::indx, Self::  zp, Self::  zp, Self::  zp, Self::  zp, Self:: imp, Self:: imm, Self:: acc, Self:: imm, Self::abso, Self::abso, Self::abso, Self::abso, /* 4 */
 /* 5 */     Self::rel, Self::indy, Self:: imp, Self::indy, Self:: zpx, Self:: zpx, Self:: zpx, Self:: zpx, Self:: imp, Self::absy, Self:: imp, Self::absy, Self::absx, Self::absx, Self::absx, Self::absx, /* 5 */
-/* 6 */     Self::imp, Self::indx, Self:: imp, Self::indx, Self::  zp, Self::  zp, Self::  zp, Self::  zp, Self:: imp, Self:: imm, Self:: acc, Self:: imm, Self:: ind, Self::abso, Self::abso, Self::abso, /* 6 */
+/* 6 */     Self::imp, Self::indx, Self:: imp, Self::indx, Self::  zp, Self::  zp, Self::  zp, Self::  zp, Self:: imp, Self:: imm, Self:: acc, Self:: imm, Self::ind, Self::abso, Self::abso, Self::abso, /* 6 */
 /* 7 */     Self::rel, Self::indy, Self:: imp, Self::indy, Self:: zpx, Self:: zpx, Self:: zpx, Self:: zpx, Self:: imp, Self::absy, Self:: imp, Self::absy, Self::absx, Self::absx, Self::absx, Self::absx, /* 7 */
 /* 8 */     Self::imm, Self::indx, Self:: imm, Self::indx, Self::  zp, Self::  zp, Self::  zp, Self::  zp, Self:: imp, Self:: imm, Self:: imp, Self:: imm, Self::abso, Self::abso, Self::abso, Self::abso, /* 8 */
 /* 9 */     Self::rel, Self::indy, Self:: imp, Self::indy, Self:: zpx, Self:: zpx, Self:: zpy, Self:: zpy, Self:: imp, Self::absy, Self:: imp, Self::absy, Self::absx, Self::absx, Self::absy, Self::absy, /* 9 */
@@ -221,16 +219,27 @@ impl<T: Bus> MOS6502<T> {
             penaltyaddr: false,
             penaltyop: false,
             sp: 0xFF,
-            nmi: false,
-            irq: false,
             clockticks: 0,
         }
     }
 
-    pub fn reset(&mut self, bus: &T) {
+    pub fn reset(&mut self, bus: &mut T) {
         let lo = bus.cpu_read(0xFFFC) as u16;
         let hi = bus.cpu_read(0xFFFD) as u16;
         self.pc = (hi << 8) | lo;
+
+        self.a = 0;
+        self.x = 0;
+        self.y = 0;
+        self.sp = 0xFD;
+        self.status.0 |= 0x20;
+    }
+
+    pub fn nmi6502(&mut self, bus: &mut T) {
+        self.push_stack16(self.pc, bus);
+        self.push_stack8(self.status.0, bus);
+        self.status.set_interrupt_inhibit(true);
+        self.pc = (bus.cpu_read(0xFFFA) as u16) | ((bus.cpu_read(0xFFFB) as u16) << 8);
     }
 
     pub fn step(&mut self, bus: &mut T) {
@@ -238,7 +247,7 @@ impl<T: Bus> MOS6502<T> {
 
         let addrmode = self.addrtable[opcode as usize];
         let op = self.optable[opcode as usize];
-        self.clockticks = ticktable[opcode as usize];
+        self.clockticks = TICKTABLE[opcode as usize];
 
         self.penaltyaddr = false;
         self.penaltyop = false;
@@ -255,7 +264,7 @@ impl<T: Bus> MOS6502<T> {
         }
     }
 
-    fn get_value(&mut self, operand: &OperandType, bus: &T) -> u8 {
+    fn get_value(&mut self, operand: &OperandType, bus: &mut T) -> u8 {
         match operand {
             OperandType::Implied => panic!("Implied, no value to get"),
             OperandType::Immediate(v) => *v,
@@ -298,12 +307,12 @@ impl<T: Bus> MOS6502<T> {
         self.push_stack8((value & 0xFF) as u8, bus);
     }
 
-    fn pull_stack8(&mut self, bus: &T) -> u8 {
+    fn pull_stack8(&mut self, bus: &mut T) -> u8 {
         self.sp = self.sp.wrapping_add(1);
         bus.cpu_read(0x100 + (self.sp as u16))
     }
 
-    fn pull_stack16(&mut self, bus: &T) -> u16 {
+    fn pull_stack16(&mut self, bus: &mut T) -> u16 {
         let lo = self.pull_stack8(bus) as u16;
         let hi = self.pull_stack8(bus) as u16;
         (hi << 8) | lo
@@ -344,7 +353,7 @@ impl<T: Bus> MOS6502<T> {
         self.put_value(result, operand, bus);
     }
 
-    fn branch(&mut self, operand: &OperandType, bus: &mut T) {
+    fn branch(&mut self, operand: &OperandType, _bus: &mut T) {
         if let OperandType::Relative(disp) = operand {
             let oldpc = self.pc;
             self.pc = self.pc.wrapping_add_signed(*disp as i16);
@@ -401,7 +410,7 @@ impl<T: Bus> MOS6502<T> {
         }
     }
 
-    fn brk(&mut self, operand: &OperandType, bus: &mut T) {
+    fn brk(&mut self, _operand: &OperandType, bus: &mut T) {
         self.push_stack16(self.pc + 1, bus);
         self.push_stack8(self.status.0 | 0x10, bus);
         self.status.set_interrupt_inhibit(true);
@@ -423,19 +432,19 @@ impl<T: Bus> MOS6502<T> {
         }
     }
 
-    fn clc(&mut self, operand: &OperandType, bus: &mut T) {
+    fn clc(&mut self, _operand: &OperandType, _bus: &mut T) {
         self.status.set_carry(false);
     }
 
-    fn cld(&mut self, operand: &OperandType, bus: &mut T) {
+    fn cld(&mut self, _operand: &OperandType, _bus: &mut T) {
         self.status.set_decimal(false);
     }
 
-    fn cli(&mut self, operand: &OperandType, bus: &mut T) {
+    fn cli(&mut self, _operand: &OperandType, _bus: &mut T) {
         self.status.set_interrupt_inhibit(false);
     }
 
-    fn clv(&mut self, operand: &OperandType, bus: &mut T) {
+    fn clv(&mut self, _operand: &OperandType, _bus: &mut T) {
         self.status.set_overflow(false);
     }
 
@@ -480,13 +489,13 @@ impl<T: Bus> MOS6502<T> {
         self.put_value(result, operand, bus);
     }
 
-    fn dex(&mut self, operand: &OperandType, bus: &mut T) {
+    fn dex(&mut self, _operand: &OperandType, _bus: &mut T) {
         self.x = self.x.wrapping_sub(1);
         self.zerocalc(self.x);
         self.signcalc(self.x);
     }
 
-    fn dey(&mut self, operand: &OperandType, bus: &mut T) {
+    fn dey(&mut self, _operand: &OperandType, _bus: &mut T) {
         self.y = self.y.wrapping_sub(1);
         self.zerocalc(self.y);
         self.signcalc(self.y);
@@ -513,19 +522,19 @@ impl<T: Bus> MOS6502<T> {
         self.put_value(result, operand, bus);
     }
 
-    fn inx(&mut self, operand: &OperandType, bus: &mut T) {
+    fn inx(&mut self, _operand: &OperandType, _bus: &mut T) {
         self.x = self.x.wrapping_add(1);
         self.zerocalc(self.x);
         self.signcalc(self.x);
     }
 
-    fn iny(&mut self, operand: &OperandType, bus: &mut T) {
+    fn iny(&mut self, _operand: &OperandType, _bus: &mut T) {
         self.y = self.y.wrapping_add(1);
         self.zerocalc(self.y);
         self.signcalc(self.y);
     }
 
-    fn jmp(&mut self, operand: &OperandType, bus: &mut T) {
+    fn jmp(&mut self, operand: &OperandType, _bus: &mut T) {
         match operand {
             OperandType::Implied => panic!("JMP is not implied"),
             OperandType::Immediate(_) => panic!("JMP is not an immediate 8-bit value"),
@@ -581,7 +590,7 @@ impl<T: Bus> MOS6502<T> {
         self.put_value(result, operand, bus);
     }
 
-    fn nop(&mut self, operand: &OperandType, bus: &mut T) {}
+    fn nop(&mut self, _operand: &OperandType, _bus: &mut T) {}
 
     fn ora(&mut self, operand: &OperandType, bus: &mut T) {
         self.penaltyop = true;
@@ -594,22 +603,22 @@ impl<T: Bus> MOS6502<T> {
         self.a = result;
     }
 
-    fn pha(&mut self, operand: &OperandType, bus: &mut T) {
+    fn pha(&mut self, _operand: &OperandType, bus: &mut T) {
         self.push_stack8(self.a, bus);
     }
 
-    fn php(&mut self, operand: &OperandType, bus: &mut T) {
+    fn php(&mut self, _operand: &OperandType, bus: &mut T) {
         self.push_stack8(self.status.0 | 0x10, bus);
     }
 
-    fn pla(&mut self, operand: &OperandType, bus: &mut T) {
+    fn pla(&mut self, _operand: &OperandType, bus: &mut T) {
         self.a = self.pull_stack8(bus);
 
         self.zerocalc(self.a);
         self.signcalc(self.a);
     }
 
-    fn plp(&mut self, operand: &OperandType, bus: &mut T) {
+    fn plp(&mut self, _operand: &OperandType, bus: &mut T) {
         self.status.0 = self.pull_stack8(bus) | 0x20;
     }
 
@@ -642,12 +651,12 @@ impl<T: Bus> MOS6502<T> {
         self.put_value(result, operand, bus);
     }
 
-    fn rti(&mut self, operand: &OperandType, bus: &mut T) {
+    fn rti(&mut self, _operand: &OperandType, bus: &mut T) {
         self.status.0 = self.pull_stack8(bus);
         self.pc = self.pull_stack16(bus);
     }
 
-    fn rts(&mut self, operand: &OperandType, bus: &mut T) {
+    fn rts(&mut self, _operand: &OperandType, bus: &mut T) {
         self.pc = self.pull_stack16(bus) + 1;
     }
 
@@ -664,15 +673,15 @@ impl<T: Bus> MOS6502<T> {
         self.a = result as u8;
     }
 
-    fn sec(&mut self, operand: &OperandType, bus: &mut T) {
+    fn sec(&mut self, _operand: &OperandType, _bus: &mut T) {
         self.status.set_carry(true);
     }
 
-    fn sed(&mut self, operand: &OperandType, bus: &mut T) {
+    fn sed(&mut self, _operand: &OperandType, _bus: &mut T) {
         self.status.set_decimal(true);
     }
 
-    fn sei(&mut self, operand: &OperandType, bus: &mut T) {
+    fn sei(&mut self, _operand: &OperandType, _bus: &mut T) {
         self.status.set_interrupt_inhibit(true);
     }
 
@@ -688,37 +697,37 @@ impl<T: Bus> MOS6502<T> {
         self.put_value(self.y, operand, bus);
     }
 
-    fn tax(&mut self, operand: &OperandType, bus: &mut T) {
+    fn tax(&mut self, _operand: &OperandType, _bus: &mut T) {
         self.x = self.a;
 
         self.zerocalc(self.x);
         self.signcalc(self.x);
     }
 
-    fn tay(&mut self, operand: &OperandType, bus: &mut T) {
+    fn tay(&mut self, _operand: &OperandType, _bus: &mut T) {
         self.y = self.a;
 
         self.zerocalc(self.y);
         self.signcalc(self.y);
     }
 
-    fn tsx(&mut self, operand: &OperandType, bus: &mut T) {
+    fn tsx(&mut self, _operand: &OperandType, _bus: &mut T) {
         self.x = self.sp;
         self.zerocalc(self.x);
         self.signcalc(self.x);
     }
 
-    fn txa(&mut self, operand: &OperandType, bus: &mut T) {
+    fn txa(&mut self, _operand: &OperandType, _bus: &mut T) {
         self.a = self.x;
         self.zerocalc(self.a);
         self.signcalc(self.a);
     }
 
-    fn txs(&mut self, operand: &OperandType, bus: &mut T) {
+    fn txs(&mut self, _operand: &OperandType, _bus: &mut T) {
         self.sp = self.x;
     }
 
-    fn tya(&mut self, operand: &OperandType, bus: &mut T) {
+    fn tya(&mut self, _operand: &OperandType, _bus: &mut T) {
         self.a = self.y;
         self.zerocalc(self.a);
         self.signcalc(self.a);
@@ -800,31 +809,23 @@ mod tests {
     }
 
     impl Bus for SimpleMem {
-        fn cpu_read(&self, address: u16) -> u8 {
+        fn cpu_read(&mut self, address: u16) -> u8 {
             self.memory[address as usize]
         }
 
         fn cpu_write(&mut self, address: u16, value: u8) {
             self.memory[address as usize] = value;
         }
-
-        fn ppu_read(&self, address: u16) -> u8 {
-            todo!()
-        }
-
-        fn ppu_write(&mut self, address: u16, value: u8) {
-            todo!()
-        }
     }
 
     #[test]
     fn test_reset() {
-        let device = SimpleMem {
+        let mut device = SimpleMem {
             memory: vec![0xea; 256 * 256],
         };
 
         let mut cpu = MOS6502::new();
-        cpu.reset(&device);
+        cpu.reset(&mut device);
 
         assert_eq!(cpu.pc, 0xEAEA);
     }
@@ -836,7 +837,7 @@ mod tests {
         };
 
         let mut cpu = MOS6502::new();
-        cpu.reset(&device);
+        cpu.reset(&mut device);
 
         cpu.step(&mut device);
         assert_eq!(cpu.pc, 0xEAEB);
@@ -848,7 +849,7 @@ mod tests {
         let mut device = SimpleMem { memory };
 
         let mut cpu = MOS6502::new();
-        cpu.reset(&device);
+        cpu.reset(&mut device);
         cpu.pc = 0x400;
 
         for _ in 0..100000000 {

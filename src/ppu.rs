@@ -1,6 +1,6 @@
 use bitfield_struct::bitfield;
 
-use crate::{cartridge::Cartridge};
+use crate::cartridge::Cartridge;
 
 #[bitfield(u8)]
 struct PPUCTRL {
@@ -93,7 +93,7 @@ pub struct PPU {
     oam_addr: u8,
     addr_latch: bool,
     palette: [u8; 32],
-    ciram: [u8; 256],
+    ciram: [u8; 2048],
 
     status: PPUSTATUS,
     ctrl: PPUCTRL,
@@ -118,8 +118,6 @@ pub struct PPU {
     attrib_1: u16,
 
     nametable_address: NametableAddress,
-    scanline: i32,
-    dot: usize,
 }
 
 impl PPU {
@@ -134,7 +132,7 @@ impl PPU {
             oam_addr: 0,
             addr_latch: false,
             palette: [0; 32],
-            ciram: [0; 256],
+            ciram: [0; 2048],
             fine_x_scroll: 0,
             status: PPUSTATUS(0),
             ctrl: PPUCTRL(0),
@@ -160,12 +158,10 @@ impl PPU {
             attrib_0: 0,
             attrib_1: 0,
             nametable_address: NametableAddress(0),
-            scanline: 0,
-            dot: 0,
         }
     }
 
-    pub fn cpu_ppu_bus_read<T : Cartridge>(&mut self, address: u8, cart: &mut dyn Cartridge) -> u8 {
+    pub fn cpu_ppu_bus_read(&mut self, address: u8, cart: &dyn Cartridge) -> u8 {
         let mut value: u8 = 0;
 
         match address {
@@ -188,9 +184,9 @@ impl PPU {
             }
             7 => {
                 value = self.ppudata_buffer;
-                self.ppudata_buffer = cart.ppu_read(self.v.0, &self.ciram);
+                self.ppudata_buffer = self.internal_bus_read(self.v.0, cart);
 
-                if self.v.0 >= 0x3f00 {
+                if self.v.0 >= 0x3f00 && self.v.0 <= 0x3fff {
                     value = self.ppudata_buffer; // Do not delay palette reads
                 }
 
@@ -206,18 +202,40 @@ impl PPU {
         value
     }
 
-    fn internal_bus_write(&mut self, address: u16, value: u8, cart: &mut Box<dyn Cartridge>) {
-
+    fn internal_bus_write(&mut self, address: u16, value: u8, cart: &mut dyn Cartridge) {
+        if address >= 0x3F00 && address <= 0x3FFF {
+            // Palette control
+            let index = address & 0xF;
+            self.palette[if index == 0 {
+                0
+            } else {
+                (address & 0x1F) as usize
+            }] = value;
+        } else {
+            cart.ppu_write(address, value, &mut self.ciram);
+        }
     }
 
-    fn internal_bus_read(&mut self, address: u16, cart: &Box<dyn Cartridge>) -> u8 {
-        0
+    fn internal_bus_read(&mut self, address: u16, cart: &dyn Cartridge) -> u8 {
+        if address >= 0x3F00 && address <= 0x3FFF {
+            // Palette control
+            let index = address & 0x3;
+            return self.palette[if index == 0 {
+                0
+            } else {
+                (address & 0x1F) as usize
+            }];
+        } else {
+            cart.ppu_read(address, &self.ciram)
+        }
     }
 
-    pub fn cpu_ppu_bus_write(&mut self, address: u16, value: u8, cart: &mut Box<dyn Cartridge>) {
+    pub fn cpu_ppu_bus_write(&mut self, address: u8, value: u8, cart: &mut dyn Cartridge) {
         match address {
             0 => {
                 self.ctrl.0 = value;
+                self.t.set_upper_horizontal_nametable((value & 1) != 0);
+                self.t.set_upper_vertical_nametable(((value >> 1) & 1) != 0);
             }
             1 => {
                 self.mask.0 = value;
@@ -267,18 +285,19 @@ impl PPU {
                     1
                 };
             }
-            _ => panic!("Out of range"),
+            _ => {}
+            // _ => panic!("Out of range"),
         };
     }
 
-    fn nametable_fetch(&mut self, cart: &Box<dyn Cartridge>) {
+    fn nametable_fetch(&mut self, cart: &dyn Cartridge) {
         self.next_tile = self.internal_bus_read(0x2000 | (self.v.0 & 0x0FFF), cart);
     }
 
-    fn attribute_fetch(&mut self, cart: &Box<dyn Cartridge>) {
+    fn attribute_fetch(&mut self, cart: &dyn Cartridge) {
         self.next_attribute = self.internal_bus_read(
             0x23C0 | (self.v.0 & 0x0C00) | ((self.v.0 >> 4) & 0x38) | ((self.v.0 >> 2) & 0x07),
-            cart
+            cart,
         );
         if (self.v.coarse_y_scroll() & 2) != 0 {
             self.next_attribute >>= 4;
@@ -289,7 +308,7 @@ impl PPU {
         self.next_attribute &= 0b11;
     }
 
-    fn bg_lsb_fetch(&mut self, cart: &Box<dyn Cartridge>) {
+    fn bg_lsb_fetch(&mut self, cart: &dyn Cartridge) {
         self.nametable_address
             .set_fine_y_offset(self.v.fine_y_scroll());
         self.nametable_address.set_hi_bit_plane(false);
@@ -299,7 +318,7 @@ impl PPU {
         self.next_pattern_lsb = self.internal_bus_read(self.nametable_address.0, cart);
     }
 
-    fn bg_msb_fetch(&mut self, cart: &Box<dyn Cartridge>) {
+    fn bg_msb_fetch(&mut self, cart: &dyn Cartridge) {
         self.nametable_address.set_hi_bit_plane(true);
         self.next_pattern_msb = self.internal_bus_read(self.nametable_address.0, cart);
     }
@@ -359,15 +378,15 @@ impl PPU {
         };
     }
 
-    pub fn tick(&mut self, fb: &mut [u32], cart: &Box<dyn Cartridge>) {
-        if self.scanline <= 239 {
-            if self.scanline == -1 && self.dot == 1 {
+    pub fn tick(&mut self, scanline: i32, dot: u16, fb: &mut [u32], cart: &dyn Cartridge) -> bool {
+        if scanline <= 239 {
+            if scanline == -1 && dot == 1 {
                 self.status.set_vertical_blank_started(false);
                 self.status.set_sprite_overflow(false);
                 self.status.set_sprite_0_hit(false);
             }
 
-            if (self.dot >= 2 && self.dot < 258) || (self.dot >= 321 && self.dot < 338) {
+            if (dot >= 2 && dot < 258) || (dot >= 321 && dot < 338) {
                 if self.mask.show_background() {
                     self.pattern_plane_0 <<= 1;
                     self.pattern_plane_1 <<= 1;
@@ -375,7 +394,7 @@ impl PPU {
                     self.attrib_1 <<= 1;
                 }
 
-                match (self.dot - 1) % 8 {
+                match (dot - 1) % 8 {
                     0 => {
                         self.load_shifters();
                         self.nametable_fetch(cart);
@@ -394,9 +413,9 @@ impl PPU {
                 };
             }
 
-            if self.dot == 256 {
+            if dot == 256 {
                 self.inc_vert();
-            } else if self.dot == 257 {
+            } else if dot == 257 {
                 self.load_shifters();
 
                 if self.mask.show_background() || self.mask.show_sprites() {
@@ -414,25 +433,87 @@ impl PPU {
                     }
 
                     self.num_sprites_on_row = 0;
+
+                    for i in 0..64 {
+                        let delta_y = scanline - (self.oam_entries[i].y as i32);
+                        if delta_y >= 0
+                            && (if self.ctrl.tall_sprites() {
+                                delta_y < 16
+                            } else {
+                                delta_y < 8
+                            })
+                            && self.num_sprites_on_row < 8
+                        {
+                            self.temp_oam[self.num_sprites_on_row].y = self.oam_entries[i].y;
+                            self.temp_oam[self.num_sprites_on_row].tile_index =
+                                self.oam_entries[i].tile_index;
+                            self.temp_oam[self.num_sprites_on_row].attributes =
+                                self.oam_entries[i].attributes;
+                            self.temp_oam[self.num_sprites_on_row].x = self.oam_entries[i].x;
+                            self.num_sprites_on_row += 1;
+                            if self.num_sprites_on_row == 8 {
+                                self.status.set_sprite_overflow(true);
+                            }
+                        }
+                    }
                 }
-            } else if self.dot == 338 || self.dot == 340 {
+            } else if dot == 338 {
                 self.nametable_fetch(cart);
-            } else if self.dot == 340 {
-                // if self.
+            } else if dot == 340 {
+                self.nametable_fetch(cart);
+
+                if self.mask.show_sprites() {
+                    for i in 0..self.num_sprites_on_row {
+                        if self.ctrl.tall_sprites() {
+                            let flipped_y = (self.temp_oam[i].attributes & 0x80) != 0;
+                            let mut y_offset = scanline - (self.temp_oam[i].y as i32);
+
+                            if flipped_y {
+                                y_offset = 15 - y_offset;
+                            }
+
+                            let mut sprite_index = self.temp_oam[i].tile_index & 0xFE;
+                            if y_offset > 7 {
+                                y_offset -= 8;
+                                sprite_index += 1;
+                            }
+
+                            self.nametable_address.set_fine_y_offset(y_offset as u8);
+                            self.nametable_address.set_hi_bit_plane(false);
+                            self.nametable_address.set_tile_index(sprite_index);
+                            self.nametable_address
+                                .set_upper_patter_table((self.temp_oam[i].tile_index & 1) == 1);
+                        } else {
+                            self.nametable_address
+                                .set_fine_y_offset((scanline - (self.temp_oam[i].y as i32)) as u8);
+                            let flipped_y = (self.temp_oam[i].attributes & 0x80) != 0;
+                            if flipped_y {
+                                self.nametable_address
+                                    .set_fine_y_offset(7 - self.nametable_address.fine_y_offset());
+                            }
+
+                            self.nametable_address.set_hi_bit_plane(false);
+                            self.nametable_address
+                                .set_tile_index(self.temp_oam[i].tile_index);
+                            self.nametable_address
+                                .set_upper_patter_table(self.ctrl.upper_sprite_pattern_table());
+                        }
+
+                        self.sprite_lsb[i] = cart.ppu_read(self.nametable_address.0, &self.ciram);
+                        self.nametable_address.set_hi_bit_plane(true);
+                        self.sprite_msb[i] = cart.ppu_read(self.nametable_address.0, &self.ciram);
+                    }
+                }
             }
 
-            if self.scanline == -1
-                && self.dot >= 280
-                && self.dot <= 304
-                && self.mask.show_background()
-            {
+            if scanline == -1 && dot >= 280 && dot <= 304 && self.mask.show_background() {
                 self.v.set_coarse_y_scroll(self.t.coarse_y_scroll());
                 self.v.set_fine_y_scroll(self.t.fine_y_scroll());
                 self.v
                     .set_upper_vertical_nametable(self.t.upper_vertical_nametable());
             }
 
-            if self.scanline >= 0 && self.dot >= 1 && self.dot <= 256 {
+            if scanline >= 0 && dot >= 1 && dot <= 256 {
                 let mut bg_pixel: u8 = 0;
                 let mut bg_palette: u8 = 0;
 
@@ -456,16 +537,73 @@ impl PPU {
                     bg_palette = (attr_hi << 3) | (attr_lo << 2);
                 }
 
-                let mut output_palette_location: u16 = 0x3F00;
+                let mut first_found: i32 = -1;
+                let mut sprite_pixel: u8 = 0;
+                let mut sprite_palette: u8 = 0;
+
+                if self.mask.show_sprites() {
+                    for sprite_n in 0..self.num_sprites_on_row {
+                        if self.temp_oam[sprite_n].x == 0 {
+                            let flipped_x = (self.temp_oam[sprite_n].attributes & 0x40) != 0;
+                            if sprite_pixel == 0 {
+                                #[rustfmt::skip]
+                                let lo_bit = if (self.sprite_lsb[sprite_n] & (if flipped_x { 1} else {0x80})) != 0 { 1 } else { 0 };
+                                #[rustfmt::skip]
+                                let hi_bit = if (self.sprite_msb[sprite_n] & (if flipped_x { 1} else {0x80})) != 0 { 1 } else { 0 };
+                                let pix = (hi_bit << 1) | lo_bit;
+
+                                if pix != 0 {
+                                    first_found = sprite_n as i32;
+                                    if sprite_n == 0
+                                        && bg_pixel != 0
+                                        && self.temp_oam[0].y == self.oam_entries[0].y
+                                    {
+                                        self.status.set_sprite_0_hit(true);
+                                    }
+
+                                    sprite_pixel = pix;
+                                    sprite_palette =
+                                        (self.temp_oam[sprite_n].attributes & 0b11) << 2;
+                                }
+                            }
+
+                            if flipped_x {
+                                self.sprite_lsb[sprite_n] >>= 1;
+                                self.sprite_msb[sprite_n] >>= 1;
+                            } else {
+                                self.sprite_lsb[sprite_n] <<= 1;
+                                self.sprite_msb[sprite_n] <<= 1;
+                            }
+                        } else {
+                            self.temp_oam[sprite_n].x -= 1;
+                        }
+                    }
+                }
+
+                let mut output_palette_location: u16 = 0x00;
                 let mut output_pixel = bg_pixel;
                 let mut output_palette = bg_palette;
 
-                let palette_index = self.internal_bus_read(
-                    output_palette_location | (output_palette as u16) | (output_pixel as u16),
-                    cart
-                ) as usize;
+                if self.mask.show_sprites() {
+                    if bg_pixel == 0 && sprite_pixel != 0 {
+                        output_pixel = sprite_pixel;
+                        output_palette = sprite_palette;
+                        output_palette_location = 0x10;
+                    } else if sprite_pixel != 0 && bg_pixel != 0 {
+                        if first_found >= 0
+                            && (((self.temp_oam[first_found as usize].attributes >> 5) & 1) == 0)
+                        {
+                            output_pixel = sprite_pixel;
+                            output_palette = sprite_palette;
+                            output_palette_location = 0x10;
+                        }
+                    }
+                }
 
-                let pixel = &mut fb[256 * (self.scanline as usize) + (self.dot - 1)];
+                let palette_addr: u16 = output_palette_location | (output_palette as u16) | (output_pixel as u16);
+                let palette_index = (self.palette[if (palette_addr & 0x3) == 0 { 0 } else { (palette_addr & 0x1F) as usize}] & 0x3f) as usize;
+                
+                let pixel = &mut fb[256 * (scanline as usize) + ((dot as usize) - 1)];
                 *pixel = (0xFF << 24)
                     | ((PALETTE_COLORS[palette_index * 3] as u32) << 16)
                     | ((PALETTE_COLORS[(palette_index * 3) + 1] as u32) << 8)
@@ -473,11 +611,13 @@ impl PPU {
             }
         }
 
-        if self.scanline == 241 && self.dot == 1 {
+        if scanline == 241 && dot == 1 {
             self.status.set_vertical_blank_started(true);
             if self.ctrl.gen_nmi_at_vblank() {
-                // unsafe { nmi6502() };
+                return true;
             }
         }
+
+        false
     }
 }
