@@ -9,7 +9,6 @@ edition = "2021"
 bitfield-struct = "0.8.0"
 byteorder = "1.4.3"
 glow = "0.14.0"
-tinyaudio = "0.1.4"
 
 [dependencies.windows]
     version = "0.58.0"

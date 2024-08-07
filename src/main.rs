@@ -54,7 +54,7 @@ fn slice_to_u8_slice<'a, T>(data: &[T]) -> &'a [u8] {
 }
 
 fn main() {
-    let rom_path = "roms/ducktales.nes";
+    let rom_path = "roms/smb.nes";
     let mut nes = nes001::NES001::new(mappers::load_cart(INES::new(rom_path)));
 
     let mut controller_state: ControllerState = ControllerState::new();
@@ -83,20 +83,10 @@ fn main() {
         }
     };
 
-    let dt_target = std::time::Duration::from_micros(16666);
-    let mut last_time = std::time::Instant::now();
-    let mut accum = std::time::Duration::ZERO;
-    let mut sec_accum = std::time::Duration::ZERO;
-    let one_second_duration = std::time::Duration::from_secs(1);
-    let mut nes_frames = 0;
-
     let mut wnd = window::Window::new();
     let gl = wnd.create_gl_surface();
 
-    let program = load_program(
-        &gl,
-        &std::fs::read_to_string("shaders/crt.glsl").unwrap(),
-    );
+    let program = load_program(&gl, &std::fs::read_to_string("shaders/crt.glsl").unwrap());
     unsafe {
         gl.use_program(Some(program));
 
@@ -179,7 +169,14 @@ fn main() {
         gl.vertex_attrib_pointer_f32(1, 2, glow::FLOAT, false, 4 * 4, 2 * 4);
     }
 
+    let dt_target = std::time::Duration::from_micros(16666);
+    let mut last_time = std::time::Instant::now();
+    let mut accum = std::time::Duration::ZERO;
+    let mut sec_accum = std::time::Duration::ZERO;
+    let one_second_duration = std::time::Duration::from_secs(1);
+    let mut nes_frames = 0;
     let mut running = true;
+
     while running {
         wnd.pump_events();
 

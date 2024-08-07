@@ -1,5 +1,6 @@
 use crate::{bit_helpers::SubType, cartridge::Cartridge, ines::INES};
 
+#[allow(clippy::upper_case_acronyms)]
 pub struct MMC1 {
     ines: INES,
     control_reg: u8,
@@ -67,6 +68,8 @@ impl Cartridge for MMC1 {
     fn ppu_read(&self, address: u16, ciram: &[u8]) -> u8 {
         if (address & BIT_13) == BIT_13 {
             ciram[self.ppu_addr_to_ciram_addr(address) as usize]
+        } else if self.ines.is_chr_ram {
+            self.ines.chr_rom[address as usize]
         } else if (self.control_reg & 0b10000) != 0 {
             // switch two separate 4 KB banks
             if address < 0x1000 {

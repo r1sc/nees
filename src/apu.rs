@@ -176,7 +176,7 @@ impl Pulse {
         }
     }
 
-    pub fn tick(&mut self, sweep_ones_complement: bool) {
+    pub fn tick(&mut self, _sweep_ones_complement: bool) {
         self.calculate_sweep_target();
         if self.timer.tick() {
             if self.length_counter.value > 0

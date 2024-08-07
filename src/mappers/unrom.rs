@@ -4,6 +4,7 @@ use crate::{
     ines::INES,
 };
 
+#[allow(clippy::upper_case_acronyms)]
 pub struct UNROM {
     ines: INES,
     selected_bank: u8,

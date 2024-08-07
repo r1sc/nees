@@ -5,6 +5,7 @@ use std::{
 
 use byteorder::ReadBytesExt;
 
+#[allow(clippy::upper_case_acronyms)]
 pub struct INES {
     pub mapper_no: u8,
     pub prg_rom_size_16k_chunks: u8,
