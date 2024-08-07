@@ -242,6 +242,17 @@ impl<T: Bus> MOS6502<T> {
         self.pc = (bus.cpu_read(0xFFFA) as u16) | ((bus.cpu_read(0xFFFB) as u16) << 8);
     }
 
+    pub fn irq6502(&mut self, bus: &mut T) {
+        if self.status.interrupt_inhibit() {
+            return;
+        }
+        
+        self.push_stack16(self.pc, bus);
+        self.push_stack8(self.status.0, bus);
+        self.status.set_interrupt_inhibit(true);
+        self.pc = (bus.cpu_read(0xFFFE) as u16) | ((bus.cpu_read(0xFFFF) as u16) << 8);
+    }
+
     pub fn step(&mut self, bus: &mut T) {
         let opcode = self.read8(bus);
 

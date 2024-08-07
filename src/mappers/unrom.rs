@@ -1,4 +1,8 @@
-use crate::{cartridge::Cartridge, ines::INES};
+use crate::{
+    bit_helpers::{SubType, BIT_13},
+    cartridge::Cartridge,
+    ines::INES,
+};
 
 pub struct UNROM {
     ines: INES,
@@ -18,31 +22,29 @@ impl UNROM {
     }
 }
 
-const BIT_13: u16 = 1 << 13;
-
 impl Cartridge for UNROM {
     fn ppu_read(&self, address: u16, ciram: &[u8]) -> u8 {
         if (address & BIT_13) == BIT_13 {
             ciram[self.ppu_addr_to_ciram_addr(address) as usize]
         } else {
-            self.ines.chr_rom[(address & 0x1fff) as usize]
+            self.ines.chr_rom[address.lower_8k() as usize]
         }
     }
 
     fn ppu_write(&mut self, address: u16, value: u8, ciram: &mut [u8]) {
         if (address & BIT_13) == BIT_13 {
             ciram[self.ppu_addr_to_ciram_addr(address) as usize] = value;
-        }
-        else if self.ines.is_chr_ram {
-            self.ines.chr_rom[(address & 0x1fff) as usize] = value;
+        } else if self.ines.is_chr_ram {
+            self.ines.chr_rom[address.lower_8k() as usize] = value;
         }
     }
 
     fn cpu_read(&self, address: u16) -> u8 {
         if address >= 0xC000 {
-            self.ines.prg_rom[(((self.ines.prg_rom_size_16k_chunks as usize) - 1) << 14) | (address & 0x3FFF) as usize]
+            self.ines.prg_rom[(((self.ines.prg_rom_size_16k_chunks as usize) - 1) << 14)
+                | address.lower_16k() as usize]
         } else {
-            self.ines.prg_rom[((self.selected_bank as usize) << 14) | (address & 0x3FFF) as usize]
+            self.ines.prg_rom[((self.selected_bank as usize) << 14) | address.lower_16k() as usize]
         }
     }
 

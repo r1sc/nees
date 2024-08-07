@@ -1,10 +1,14 @@
-use crate::{cartridge::Cartridge, ines::INES};
+use crate::{
+    bit_helpers::{SubType, BIT_13, MASK_16K, MASK_32K},
+    cartridge::Cartridge,
+    ines::INES,
+};
 
 pub struct NROM {
     ines: INES,
 }
 
-impl NROM {    
+impl NROM {
     pub fn new(ines: INES) -> Self {
         Self { ines }
     }
@@ -14,14 +18,12 @@ impl NROM {
     }
 }
 
-const BIT_13: u16 = 1 << 13;
-
 impl Cartridge for NROM {
     fn ppu_read(&self, address: u16, ciram: &[u8]) -> u8 {
         if (address & BIT_13) == BIT_13 {
             ciram[self.nrom_ppu_addr_to_ciram_addr(address) as usize]
         } else {
-            self.ines.chr_rom[(address & 0x1fff) as usize]
+            self.ines.chr_rom[address.lower_8k() as usize]
         }
     }
 
@@ -32,11 +34,15 @@ impl Cartridge for NROM {
     }
 
     fn cpu_read(&self, address: u16) -> u8 {
-        self.ines.prg_rom[(address & (if self.ines.prg_rom_size_16k_chunks == 1 { 0x3FFF } else { 0x7FFF })) as usize]
+        self.ines.prg_rom[(address
+            & (if self.ines.prg_rom_size_16k_chunks == 1 {
+                MASK_16K
+            } else {
+                MASK_32K
+            })) as usize]
     }
 
     fn cpu_write(&mut self, _address: u16, _value: u8) {
         // Do nothing
     }
-
 }

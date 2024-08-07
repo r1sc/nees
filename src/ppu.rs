@@ -88,6 +88,7 @@ const PALETTE_COLORS: [u8; 192] = [
     0xAE, 0xB4, 0xE5, 0xC7, 0xB5, 0xDF, 0xE4, 0xA9, 0xA9, 0xA9, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 ];
 
+#[allow(clippy::upper_case_acronyms)]
 pub struct PPU {
     oam_entries: [OAMEntry; 64],
     oam_addr: u8,
@@ -290,10 +291,12 @@ impl PPU {
         };
     }
 
+    #[inline]
     fn nametable_fetch(&mut self, cart: &dyn Cartridge) {
         self.next_tile = self.internal_bus_read(0x2000 | (self.v.0 & 0x0FFF), cart);
     }
 
+    #[inline]
     fn attribute_fetch(&mut self, cart: &dyn Cartridge) {
         self.next_attribute = self.internal_bus_read(
             0x23C0 | (self.v.0 & 0x0C00) | ((self.v.0 >> 4) & 0x38) | ((self.v.0 >> 2) & 0x07),
@@ -308,6 +311,7 @@ impl PPU {
         self.next_attribute &= 0b11;
     }
 
+    #[inline]
     fn bg_lsb_fetch(&mut self, cart: &dyn Cartridge) {
         self.nametable_address
             .set_fine_y_offset(self.v.fine_y_scroll());
@@ -318,11 +322,13 @@ impl PPU {
         self.next_pattern_lsb = self.internal_bus_read(self.nametable_address.0, cart);
     }
 
+    #[inline]
     fn bg_msb_fetch(&mut self, cart: &dyn Cartridge) {
         self.nametable_address.set_hi_bit_plane(true);
         self.next_pattern_msb = self.internal_bus_read(self.nametable_address.0, cart);
     }
 
+    #[inline]
     fn inc_horiz(&mut self) {
         if !self.mask.show_background() {
             return;
@@ -338,6 +344,7 @@ impl PPU {
         }
     }
 
+    #[inline]
     fn inc_vert(&mut self) {
         if !self.mask.show_background() {
             return;
@@ -361,6 +368,7 @@ impl PPU {
         }
     }
 
+    #[inline]
     fn load_shifters(&mut self) {
         self.pattern_plane_0 |= self.next_pattern_lsb as u16;
         self.pattern_plane_1 |= self.next_pattern_msb as u16;

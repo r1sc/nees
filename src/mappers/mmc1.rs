@@ -1,4 +1,4 @@
-use crate::{cartridge::Cartridge, ines::INES};
+use crate::{bit_helpers::SubType, cartridge::Cartridge, ines::INES};
 
 pub struct MMC1 {
     ines: INES,
@@ -71,10 +71,10 @@ impl Cartridge for MMC1 {
             // switch two separate 4 KB banks
             if address < 0x1000 {
                 self.ines.chr_rom
-                    [(self.chr_bank_4_lo as usize) * 0x1000 + (address & 0x0FFF) as usize]
+                    [(self.chr_bank_4_lo as usize) * 0x1000 + address.lower_4k() as usize]
             } else {
                 self.ines.chr_rom
-                    [(self.chr_bank_4_hi as usize) * 0x1000 + (address & 0x0FFF) as usize]
+                    [(self.chr_bank_4_hi as usize) * 0x1000 + address.lower_4k() as usize]
             }
         } else {
             // switch 8 KB at a time
@@ -99,14 +99,14 @@ impl Cartridge for MMC1 {
             if (self.control_reg & 0b01000) != 0 {
                 if address >= 0xC000 {
                     self.ines.prg_rom
-                        [(self.prg_bank_hi as usize) * 0x4000 + (address & 0x3FFF) as usize]
+                        [(self.prg_bank_hi as usize) * 0x4000 + address.lower_16k() as usize]
                 } else {
                     self.ines.prg_rom
-                        [(self.prg_bank_lo as usize) * 0x4000 + (address & 0x3FFF) as usize]
+                        [(self.prg_bank_lo as usize) * 0x4000 + address.lower_16k() as usize]
                 }
             } else {
                 self.ines.prg_rom
-                    [(self.prg_bank_32 as usize) * 0x8000 + (address & 0x7FFF) as usize]
+                    [(self.prg_bank_32 as usize) * 0x8000 + address.lower_32k() as usize]
             }
         } else {
             0

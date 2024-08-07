@@ -1,24 +1,28 @@
 use bitfield_struct::bitfield;
 
-use crate::{bus::Bus, cartridge::Cartridge, cpu, ppu::PPU};
+use crate::{apu::APU, bus::Bus, cartridge::Cartridge, cpu, ppu::PPU};
 
-struct NesBus {
+pub struct NesBus {
     cpu_ram: Vec<u8>,
-    cart: Box<dyn Cartridge>,
+    cart: Box<dyn Cartridge + Sync + Send>,
     ppu: PPU,
+    pub apu: APU,
     controller_status: [u8; 2],
     pub buttons_down: [u8; 2],
     cpu_timer: u32,
+    apu_timer: u32,
 }
 impl NesBus {
-    pub fn new(cart: Box<dyn Cartridge>) -> Self {
+    pub fn new(cart: Box<dyn Cartridge + Sync + Send>) -> Self {
         Self {
             cart,
             cpu_ram: vec![0; 2048],
             ppu: PPU::new(),
+            apu: APU::new(),
             controller_status: [0, 0],
             buttons_down: [0, 0],
             cpu_timer: 0,
+            apu_timer: 0,
         }
     }
 }
@@ -33,8 +37,7 @@ impl Bus for NesBus {
         } else if (address >= 0x4000 && address <= 0x4013) || address == 0x4015 || address == 0x4017
         {
             // APU
-            //return apu_read(address);
-            0
+            self.apu.read_reg(address)
         } else if address >= 0x4000 {
             // Cart
             self.cart.cpu_read(address)
@@ -61,13 +64,14 @@ impl Bus for NesBus {
             self.controller_status[1] = self.buttons_down[1];
         } else if (address >= 0x4000 && address <= 0x4013) || address == 0x4015 || address == 0x4017
         {
-            //apu_write(address, value);
+            self.apu.write_reg(address, value);
         } else if address >= 0x4000 {
             // Cart
             self.cart.cpu_write(address, value);
         } else if address >= 0x2000 {
             // PPU
-            self.ppu.cpu_ppu_bus_write((address & 7) as u8, value, &mut *self.cart);
+            self.ppu
+                .cpu_ppu_bus_write((address & 7) as u8, value, &mut *self.cart);
         } else {
             // CPU
             self.cpu_ram[(address & 0x7ff) as usize] = value;
@@ -89,14 +93,14 @@ pub struct ControllerState {
 
 pub struct NES001 {
     cpu: cpu::MOS6502<NesBus>,
-    bus: NesBus,
+    pub bus: NesBus,
     pub fb: Vec<u32>,
 }
 
 impl NES001 {
-    pub fn new(cart: Box<dyn Cartridge>) -> Self {
+    pub fn new(cart: Box<dyn Cartridge + Sync + Send>) -> Self {
         let mut bus = NesBus::new(cart);
-        let mut cpu =  cpu::MOS6502::new();
+        let mut cpu = cpu::MOS6502::new();
         cpu.reset(&mut bus);
 
         Self {
@@ -106,14 +110,16 @@ impl NES001 {
         }
     }
 
-    pub fn tick_frame(&mut self) {
+    pub fn tick_frame<T : FnMut(i16)>(&mut self, waveout_callback: &mut T) {
         for scanline in -1..=260 {
             for dot in 0..=340 {
-                if self.bus
+                if self
+                    .bus
                     .ppu
-                    .tick(scanline, dot, &mut self.fb, &*self.bus.cart) {
-                        self.cpu.nmi6502(&mut self.bus);
-                    }
+                    .tick(scanline, dot, &mut self.fb, &*self.bus.cart)
+                {
+                    self.cpu.nmi6502(&mut self.bus);
+                }
 
                 if self.bus.cpu_timer == 0 {
                     self.cpu.step(&mut self.bus);
@@ -121,6 +127,22 @@ impl NES001 {
                 } else {
                     self.bus.cpu_timer -= 1;
                 }
+
+                if self.bus.apu_timer == 2 {
+                    self.bus.apu.tick_triangle();
+                }
+                
+                if self.bus.apu_timer == 5 {
+                    self.bus.apu.tick_triangle();
+                    self.bus.apu.tick(scanline as i16, waveout_callback);
+                    self.bus.apu_timer = 0;
+                } else {
+                    self.bus.apu_timer += 1;
+                }
+
+                if self.bus.apu.frame_interrupt_flag {
+                    self.cpu.irq6502(&mut self.bus);
+                }                
             }
         }
     }
