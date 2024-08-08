@@ -535,7 +535,10 @@ impl PPU {
                 let mut bg_pixel: u8 = 0;
                 let mut bg_palette: u8 = 0;
 
-                if self.mask.show_background() {
+                let show_background =
+                    self.mask.show_background() && (self.mask.show_background_left() || dot > 8);
+
+                if show_background {
                     let bit: u16 = 0x8000 >> self.fine_x_scroll;
 
                     let lo_bit = if (self.pattern_plane_0 & bit) != 0 {
@@ -610,13 +613,23 @@ impl PPU {
                 let mut output_pixel = bg_pixel;
                 let mut output_palette = bg_palette;
 
-                if self.mask.show_sprites()
-                    && first_found >= 0
-                    && (((self.temp_oam[first_found as usize].attributes >> 5) & 1) == 0)
-                {
-                    output_pixel = sprite_pixel;
-                    output_palette = sprite_palette;
-                    output_palette_location = 0x10;
+                let show_sprites =
+                    self.mask.show_sprites() && (self.mask.show_sprites_left() || dot > 8);
+
+                if show_sprites {
+                    if bg_pixel == 0 && sprite_pixel != 0 {
+                        output_pixel = sprite_pixel;
+                        output_palette = sprite_palette;
+                        output_palette_location = 0x10;
+                    } else if sprite_pixel != 0 && bg_pixel != 0 {
+                        if first_found < 0
+                            || ((self.temp_oam[first_found as usize].attributes >> 5) & 1) == 0
+                        {
+                            output_pixel = sprite_pixel;
+                            output_palette = sprite_palette;
+                            output_palette_location = 0x10;
+                        }
+                    }
                 }
 
                 let palette_addr: u16 =

@@ -52,7 +52,8 @@ fn main() {
     let rom_path = "roms/smb3.nes";
     let mut nes = nes001::NES001::from_rom(&std::fs::read(rom_path).unwrap());
 
-    let mut controller_state: ControllerState = ControllerState::new();
+    let mut player1_controller_state: ControllerState = ControllerState::new();
+    let mut player2_controller_state: ControllerState = ControllerState::new();
 
     //*** AUDIO STUFF */
     let mut buffer_pos = 0;
@@ -176,7 +177,7 @@ fn main() {
 
     while running {
         wnd.pump_events();
-        gamepad.update_controller_state(&mut controller_state);
+        gamepad.update_controller_state(&mut [&mut player1_controller_state, &mut player2_controller_state]);
 
         while let Some(event) = wnd.get_event() {
             use platform::window::WindowEvents::*;
@@ -188,14 +189,14 @@ fn main() {
                     gl.clear(glow::COLOR_BUFFER_BIT);
                     wnd.swap_buffers();
                 },
-                Key(b'Q', down) => controller_state.set_select(down),
-                Key(b'W', down) => controller_state.set_start(down),
-                Key(b'A', down) => controller_state.set_b(down),
-                Key(b'S', down) => controller_state.set_a(down),
-                Key(37, down) => controller_state.set_left(down),
-                Key(38, down) => controller_state.set_up(down),
-                Key(39, down) => controller_state.set_right(down),
-                Key(40, down) => controller_state.set_down(down),
+                Key(b'Q', down) => player1_controller_state.set_select(down),
+                Key(b'W', down) => player1_controller_state.set_start(down),
+                Key(b'A', down) => player1_controller_state.set_b(down),
+                Key(b'S', down) => player1_controller_state.set_a(down),
+                Key(37, down) => player1_controller_state.set_left(down),
+                Key(38, down) => player1_controller_state.set_up(down),
+                Key(39, down) => player1_controller_state.set_right(down),
+                Key(40, down) => player1_controller_state.set_down(down),
                 Close => {
                     running = false;
                 }
@@ -224,7 +225,8 @@ fn main() {
         }
 
         while accum >= dt_target {
-            nes.set_buttons_down(0, &controller_state);
+            nes.set_buttons_down(0, &player1_controller_state);
+            nes.set_buttons_down(1, &player2_controller_state);
             nes.tick_frame(&mut waveout_callback);
 
             accum -= dt_target;
