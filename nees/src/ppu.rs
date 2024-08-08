@@ -22,8 +22,8 @@ pub struct PPUMASK {
     greyscale: bool,
     show_background_left: bool,
     show_sprites_left: bool,
-    pub show_background: bool,
-    pub show_sprites: bool,
+    show_background: bool,
+    show_sprites: bool,
     emphasize_red: bool,
     emphasize_green: bool,
     emphasize_blue: bool,
@@ -98,7 +98,7 @@ pub struct PPU {
 
     status: PPUSTATUS,
     ctrl: PPUCTRL,
-    pub mask: PPUMASK,
+    mask: PPUMASK,
     t: VRAMAddress,
     v: VRAMAddress,
     fine_x_scroll: u8,
@@ -160,6 +160,10 @@ impl PPU {
             attrib_1: 0,
             nametable_address: NametableAddress(0),
         }
+    }
+
+    pub fn is_rending_enabled(&self) -> bool {
+        self.mask.show_background() || self.mask.show_sprites()
     }
 
     pub fn cpu_ppu_bus_read(&mut self, address: u8, cart: &mut dyn Cartridge) -> u8 {
@@ -568,7 +572,11 @@ impl PPU {
                                 let lo_bit = if (self.sprite_lsb[sprite_n] & (if flipped_x { 1} else {0x80})) != 0 { 1 } else { 0 };
                                 #[rustfmt::skip]
                                 let hi_bit = if (self.sprite_msb[sprite_n] & (if flipped_x { 1} else {0x80})) != 0 { 1 } else { 0 };
-                                let pix = if dot > 8 || self.mask.show_sprites_left() { (hi_bit << 1) | lo_bit } else { 0 };
+                                let pix = if dot > 8 || self.mask.show_sprites_left() {
+                                    (hi_bit << 1) | lo_bit
+                                } else {
+                                    0
+                                };
 
                                 if pix != 0 {
                                     first_found = sprite_n as i32;
@@ -602,7 +610,10 @@ impl PPU {
                 let mut output_pixel = bg_pixel;
                 let mut output_palette = bg_palette;
 
-                if self.mask.show_sprites() && first_found >= 0 && (((self.temp_oam[first_found as usize].attributes >> 5) & 1) == 0) {
+                if self.mask.show_sprites()
+                    && first_found >= 0
+                    && (((self.temp_oam[first_found as usize].attributes >> 5) & 1) == 0)
+                {
                     output_pixel = sprite_pixel;
                     output_palette = sprite_palette;
                     output_palette_location = 0x10;

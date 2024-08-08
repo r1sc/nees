@@ -150,12 +150,8 @@ impl NES001 {
                     self.cpu.irq6502(&mut self.bus);
                 }
             }
-            if scanline <= 239 {
-                if self.bus.ppu.mask.show_background() || self.bus.ppu.mask.show_sprites() {
-                    if self.bus.cart.scanline() {
-                        self.cpu.irq6502(&mut self.bus);
-                    }
-                }
+            if scanline > -1 && scanline <= 239 && self.bus.ppu.is_rending_enabled() && self.bus.cart.scanline() {
+                self.cpu.irq6502(&mut self.bus);
             }
         }
     }

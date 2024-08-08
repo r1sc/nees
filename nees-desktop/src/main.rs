@@ -1,10 +1,11 @@
-#![windows_subsystem = "windows"]
+// #![windows_subsystem = "windows"]
 
 use glow::HasContext;
 use nees::nes001;
 use nes001::ControllerState;
 
 mod platform;
+mod gamepad;
 
 
 fn load_shader(gl: &glow::Context, shader_type: u32, source: &str) -> glow::Shader {
@@ -171,8 +172,11 @@ fn main() {
     let mut nes_frames = 0;
     let mut running = true;
 
+    let mut gamepad = gamepad::Gamepad::new();
+
     while running {
         wnd.pump_events();
+        gamepad.update_controller_state(&mut controller_state);
 
         while let Some(event) = wnd.get_event() {
             use platform::window::WindowEvents::*;
