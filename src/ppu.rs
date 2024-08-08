@@ -286,8 +286,7 @@ impl PPU {
                     1
                 };
             }
-            _ => {}
-            // _ => panic!("Out of range"),
+            _ => {} // _ => panic!("Out of range"),
         };
     }
 
@@ -493,7 +492,7 @@ impl PPU {
                                 .set_upper_patter_table((self.temp_oam[i].tile_index & 1) == 1);
                         } else {
                             self.nametable_address
-                                .set_fine_y_offset((scanline - (self.temp_oam[i].y as i32)) as u8);
+                                .set_fine_y_offset(((scanline - (self.temp_oam[i].y as i32)) & 7) as u8);
                             let flipped_y = (self.temp_oam[i].attributes & 0x80) != 0;
                             if flipped_y {
                                 self.nametable_address
@@ -608,18 +607,21 @@ impl PPU {
                     }
                 }
 
-                let palette_addr: u16 = output_palette_location | (output_palette as u16) | (output_pixel as u16);
-                let palette_index = (self.palette[if (palette_addr & 0x3) == 0 { 0 } else { (palette_addr & 0x1F) as usize}] & 0x3f) as usize;
-                
+                let palette_addr: u16 =
+                    output_palette_location | (output_palette as u16) | (output_pixel as u16);
+                let palette_index = (self.palette[if (palette_addr & 0x3) == 0 {
+                    0
+                } else {
+                    (palette_addr & 0x1F) as usize
+                }] & 0x3f) as usize;
+
                 let pixel = &mut fb[256 * (scanline as usize) + ((dot as usize) - 1)];
                 *pixel = (0xFF << 24)
                     | ((PALETTE_COLORS[palette_index * 3] as u32) << 16)
                     | ((PALETTE_COLORS[(palette_index * 3) + 1] as u32) << 8)
                     | (PALETTE_COLORS[(palette_index * 3) + 2] as u32);
             }
-        }
-
-        if scanline == 241 && dot == 1 {
+        } else if scanline == 241 && dot == 1 {
             self.status.set_vertical_blank_started(true);
             if self.ctrl.gen_nmi_at_vblank() {
                 return true;

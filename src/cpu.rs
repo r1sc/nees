@@ -258,18 +258,18 @@ impl<T: Bus> MOS6502<T> {
 
         let addrmode = self.addrtable[opcode as usize];
         let op = self.optable[opcode as usize];
-        self.clockticks = TICKTABLE[opcode as usize];
-
+        
         self.penaltyaddr = false;
         self.penaltyop = false;
-
+        
+        let operand = (addrmode)(self, bus);
+        (op)(self, &operand, bus);
+        
         if opcode == 0xFC {
             self.penaltyop = true; // Special NOP
         }
-
-        let operand = (addrmode)(self, bus);
-        (op)(self, &operand, bus);
-
+        
+        self.clockticks = TICKTABLE[opcode as usize];
         if self.penaltyop && self.penaltyaddr {
             self.clockticks += 1;
         }
@@ -744,7 +744,7 @@ impl<T: Bus> MOS6502<T> {
         self.signcalc(self.a);
     }
 
-    // Not indented opcodes
+    // Not intented opcodes
 
     fn lax(&mut self, operand: &OperandType, bus: &mut T) {
         self.lda(operand, bus);
