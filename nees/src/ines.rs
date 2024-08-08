@@ -1,7 +1,4 @@
-use std::{
-    fs::File,
-    io::{BufReader, Read},
-};
+use std::io::{BufReader, Cursor, Read};
 
 use byteorder::ReadBytesExt;
 
@@ -18,8 +15,8 @@ pub struct INES {
 }
 
 impl INES {
-    pub fn new(path: &str) -> Self {
-        let mut f = BufReader::new(File::open(path).unwrap());
+    pub fn new(rom_data: &[u8]) -> Self {
+        let mut f = BufReader::new(Cursor::new(rom_data));
         let mut nesbuf = [0_u8; 4];
         f.read_exact(&mut nesbuf)
             .expect("Failed to read NES header");
@@ -33,10 +30,9 @@ impl INES {
         let _flags8 = f.read_u8().unwrap();
         let _flags9 = f.read_u8().unwrap();
         let _flags10 = f.read_u8().unwrap();
-        
+
         let mut padding = [0_u8; 5];
         f.read_exact(&mut padding).unwrap();
-
 
         let mirroring = (flags6 & 1) == 1;
         let _has_wram = ((flags6 >> 1) & 1) == 1;
@@ -54,8 +50,14 @@ impl INES {
         let mut prg_rom = vec![0; 16384 * (prg_rom_size_16k_chunks as usize)];
         f.read_exact(&mut prg_rom).unwrap();
 
-        
-        let mut chr_rom = vec![0; 8192 * (if is_chr_ram { 1 } else { chr_rom_size_8kb_chunks as usize })];
+        let mut chr_rom = vec![
+            0;
+            8192 * (if is_chr_ram {
+                1
+            } else {
+                chr_rom_size_8kb_chunks as usize
+            })
+        ];
         if !is_chr_ram {
             f.read_exact(&mut chr_rom).unwrap();
         }

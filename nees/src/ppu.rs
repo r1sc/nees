@@ -18,12 +18,12 @@ struct PPUCTRL {
 }
 
 #[bitfield(u8)]
-struct PPUMASK {
+pub struct PPUMASK {
     greyscale: bool,
     show_background_left: bool,
     show_sprites_left: bool,
-    show_background: bool,
-    show_sprites: bool,
+    pub show_background: bool,
+    pub show_sprites: bool,
     emphasize_red: bool,
     emphasize_green: bool,
     emphasize_blue: bool,
@@ -98,7 +98,7 @@ pub struct PPU {
 
     status: PPUSTATUS,
     ctrl: PPUCTRL,
-    mask: PPUMASK,
+    pub mask: PPUMASK,
     t: VRAMAddress,
     v: VRAMAddress,
     fine_x_scroll: u8,
@@ -162,7 +162,7 @@ impl PPU {
         }
     }
 
-    pub fn cpu_ppu_bus_read(&mut self, address: u8, cart: &dyn Cartridge) -> u8 {
+    pub fn cpu_ppu_bus_read(&mut self, address: u8, cart: &mut dyn Cartridge) -> u8 {
         let mut value: u8 = 0;
 
         match address {
@@ -217,7 +217,7 @@ impl PPU {
         }
     }
 
-    fn internal_bus_read(&mut self, address: u16, cart: &dyn Cartridge) -> u8 {
+    fn internal_bus_read(&mut self, address: u16, cart: &mut dyn Cartridge) -> u8 {
         if address >= 0x3F00 && address <= 0x3FFF {
             // Palette control
             let index = address & 0x3;
@@ -291,12 +291,12 @@ impl PPU {
     }
 
     #[inline]
-    fn nametable_fetch(&mut self, cart: &dyn Cartridge) {
+    fn nametable_fetch(&mut self, cart: &mut dyn Cartridge) {
         self.next_tile = self.internal_bus_read(0x2000 | (self.v.0 & 0x0FFF), cart);
     }
 
     #[inline]
-    fn attribute_fetch(&mut self, cart: &dyn Cartridge) {
+    fn attribute_fetch(&mut self, cart: &mut dyn Cartridge) {
         self.next_attribute = self.internal_bus_read(
             0x23C0 | (self.v.0 & 0x0C00) | ((self.v.0 >> 4) & 0x38) | ((self.v.0 >> 2) & 0x07),
             cart,
@@ -311,7 +311,7 @@ impl PPU {
     }
 
     #[inline]
-    fn bg_lsb_fetch(&mut self, cart: &dyn Cartridge) {
+    fn bg_lsb_fetch(&mut self, cart: &mut dyn Cartridge) {
         self.nametable_address
             .set_fine_y_offset(self.v.fine_y_scroll());
         self.nametable_address.set_hi_bit_plane(false);
@@ -322,7 +322,7 @@ impl PPU {
     }
 
     #[inline]
-    fn bg_msb_fetch(&mut self, cart: &dyn Cartridge) {
+    fn bg_msb_fetch(&mut self, cart: &mut dyn Cartridge) {
         self.nametable_address.set_hi_bit_plane(true);
         self.next_pattern_msb = self.internal_bus_read(self.nametable_address.0, cart);
     }
@@ -385,7 +385,13 @@ impl PPU {
         };
     }
 
-    pub fn tick(&mut self, scanline: i32, dot: u16, fb: &mut [u32], cart: &dyn Cartridge) -> bool {
+    pub fn tick(
+        &mut self,
+        scanline: i32,
+        dot: u16,
+        fb: &mut [u32],
+        cart: &mut dyn Cartridge,
+    ) -> bool {
         if scanline <= 239 {
             if scanline == -1 && dot == 1 {
                 self.status.set_vertical_blank_started(false);
@@ -491,8 +497,9 @@ impl PPU {
                             self.nametable_address
                                 .set_upper_patter_table((self.temp_oam[i].tile_index & 1) == 1);
                         } else {
-                            self.nametable_address
-                                .set_fine_y_offset(((scanline - (self.temp_oam[i].y as i32)) & 7) as u8);
+                            self.nametable_address.set_fine_y_offset(
+                                ((scanline - (self.temp_oam[i].y as i32)) & 7) as u8,
+                            );
                             let flipped_y = (self.temp_oam[i].attributes & 0x80) != 0;
                             if flipped_y {
                                 self.nametable_address
@@ -537,7 +544,11 @@ impl PPU {
                     } else {
                         0
                     };
-                    bg_pixel = (hi_bit << 1) | lo_bit;
+                    bg_pixel = if dot > 8 || self.mask.show_background_left() {
+                        (hi_bit << 1) | lo_bit
+                    } else {
+                        0x00
+                    };
 
                     let attr_lo = if (self.attrib_0 & bit) != 0 { 1 } else { 0 };
                     let attr_hi = if (self.attrib_1 & bit) != 0 { 1 } else { 0 };
@@ -557,7 +568,7 @@ impl PPU {
                                 let lo_bit = if (self.sprite_lsb[sprite_n] & (if flipped_x { 1} else {0x80})) != 0 { 1 } else { 0 };
                                 #[rustfmt::skip]
                                 let hi_bit = if (self.sprite_msb[sprite_n] & (if flipped_x { 1} else {0x80})) != 0 { 1 } else { 0 };
-                                let pix = (hi_bit << 1) | lo_bit;
+                                let pix = if dot > 8 || self.mask.show_sprites_left() { (hi_bit << 1) | lo_bit } else { 0 };
 
                                 if pix != 0 {
                                     first_found = sprite_n as i32;
@@ -591,20 +602,10 @@ impl PPU {
                 let mut output_pixel = bg_pixel;
                 let mut output_palette = bg_palette;
 
-                if self.mask.show_sprites() {
-                    if bg_pixel == 0 && sprite_pixel != 0 {
-                        output_pixel = sprite_pixel;
-                        output_palette = sprite_palette;
-                        output_palette_location = 0x10;
-                    } else if sprite_pixel != 0 && bg_pixel != 0 {
-                        if first_found >= 0
-                            && (((self.temp_oam[first_found as usize].attributes >> 5) & 1) == 0)
-                        {
-                            output_pixel = sprite_pixel;
-                            output_palette = sprite_palette;
-                            output_palette_location = 0x10;
-                        }
-                    }
+                if self.mask.show_sprites() && first_found >= 0 && (((self.temp_oam[first_found as usize].attributes >> 5) & 1) == 0) {
+                    output_pixel = sprite_pixel;
+                    output_palette = sprite_palette;
+                    output_palette_location = 0x10;
                 }
 
                 let palette_addr: u16 =

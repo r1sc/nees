@@ -1,17 +1,11 @@
+#![windows_subsystem = "windows"]
+
 use glow::HasContext;
-use ines::INES;
+use nees::nes001;
 use nes001::ControllerState;
-mod apu;
-mod bit_helpers;
-mod bus;
-mod cartridge;
-mod cpu;
-mod ines;
-mod mappers;
-mod nes001;
-mod ppu;
-mod waveout;
-mod window;
+
+mod platform;
+
 
 fn load_shader(gl: &glow::Context, shader_type: u32, source: &str) -> glow::Shader {
     unsafe {
@@ -54,15 +48,15 @@ fn slice_to_u8_slice<'a, T>(data: &[T]) -> &'a [u8] {
 }
 
 fn main() {
-    let rom_path = "roms/smb.nes";
-    let mut nes = nes001::NES001::new(mappers::load_cart(INES::new(rom_path)));
+    let rom_path = "roms/smb3.nes";
+    let mut nes = nes001::NES001::from_rom(&std::fs::read(rom_path).unwrap());
 
     let mut controller_state: ControllerState = ControllerState::new();
 
     //*** AUDIO STUFF */
     let mut buffer_pos = 0;
     let mut buffer = Some(0);
-    let mut w = waveout::WaveoutDevice::new(8, 15720, 262);
+    let mut w = platform::waveout::WaveoutDevice::new(8, 15720, 262);
 
     let mut waveout_callback = move |sample: i16| {
         if buffer.is_none() {
@@ -83,7 +77,7 @@ fn main() {
         }
     };
 
-    let mut wnd = window::Window::new();
+    let mut wnd = platform::window::Window::new();
     let gl = wnd.create_gl_surface();
 
     let program = load_program(&gl, &std::fs::read_to_string("shaders/crt.glsl").unwrap());
@@ -181,7 +175,7 @@ fn main() {
         wnd.pump_events();
 
         while let Some(event) = wnd.get_event() {
-            use window::WindowEvents::*;
+            use platform::window::WindowEvents::*;
             match event {
                 Resize(width, height, size) => unsafe {
                     gl.viewport(width / 2 - size / 2, height / 2 - size / 2, size, size);
@@ -237,7 +231,7 @@ fn main() {
         unsafe {
             gl.clear(glow::COLOR_BUFFER_BIT);
 
-            let u8_pixels = slice_to_u8_slice(&nes.fb);
+            let u8_pixels = slice_to_u8_slice(&nes.framebuffer);
             gl.tex_sub_image_2d(
                 glow::TEXTURE_2D,
                 0,

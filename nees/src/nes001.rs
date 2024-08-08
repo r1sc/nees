@@ -1,6 +1,6 @@
 use bitfield_struct::bitfield;
 
-use crate::{apu::APU, bus::Bus, cartridge::Cartridge, cpu, ppu::PPU};
+use crate::{apu::APU, bus::Bus, cartridge::Cartridge, cpu, ines::INES, mappers, ppu::PPU};
 
 pub struct NesBus {
     cpu_ram: Vec<u8>,
@@ -43,7 +43,8 @@ impl Bus for NesBus {
             self.cart.cpu_read(address)
         } else if address >= 0x2000 {
             // PPU
-            self.ppu.cpu_ppu_bus_read((address & 7) as u8, &*self.cart)
+            self.ppu
+                .cpu_ppu_bus_read((address & 7) as u8, &mut *self.cart)
         } else {
             // CPU
             self.cpu_ram[(address & 0x7ff) as usize]
@@ -93,12 +94,17 @@ pub struct ControllerState {
 
 pub struct NES001 {
     cpu: cpu::MOS6502<NesBus>,
-    pub bus: NesBus,
-    pub fb: Vec<u32>,
+    bus: NesBus,
+    pub framebuffer: Vec<u32>,
 }
 
 impl NES001 {
-    pub fn new(cart: Box<dyn Cartridge + Sync + Send>) -> Self {
+    pub fn from_rom(rom: &[u8]) -> Self {
+        let cart = mappers::load_cart(INES::new(rom));
+        Self::new(cart)
+    }
+
+    fn new(cart: Box<dyn Cartridge + Sync + Send>) -> Self {
         let mut bus = NesBus::new(cart);
         let mut cpu = cpu::MOS6502::new();
         cpu.reset(&mut bus);
@@ -106,17 +112,17 @@ impl NES001 {
         Self {
             bus,
             cpu,
-            fb: vec![0; 256 * 240],
+            framebuffer: vec![0; 256 * 240],
         }
     }
 
-    pub fn tick_frame<T : FnMut(i16)>(&mut self, waveout_callback: &mut T) {
+    pub fn tick_frame<T: FnMut(i16)>(&mut self, waveout_callback: &mut T) {
         for scanline in -1..=260 {
             for dot in 0..=340 {
                 if self
                     .bus
                     .ppu
-                    .tick(scanline, dot, &mut self.fb, &*self.bus.cart)
+                    .tick(scanline, dot, &mut self.framebuffer, &mut *self.bus.cart)
                 {
                     self.cpu.nmi6502(&mut self.bus);
                 }
@@ -131,7 +137,7 @@ impl NES001 {
                 if self.bus.apu_timer == 2 {
                     self.bus.apu.tick_triangle();
                 }
-                
+
                 if self.bus.apu_timer == 5 {
                     self.bus.apu.tick_triangle();
                     self.bus.apu.tick(scanline as i16, waveout_callback);
@@ -142,7 +148,14 @@ impl NES001 {
 
                 if self.bus.apu.frame_interrupt_flag {
                     self.cpu.irq6502(&mut self.bus);
-                }                
+                }
+            }
+            if scanline <= 239 {
+                if self.bus.ppu.mask.show_background() || self.bus.ppu.mask.show_sprites() {
+                    if self.bus.cart.scanline() {
+                        self.cpu.irq6502(&mut self.bus);
+                    }
+                }
             }
         }
     }

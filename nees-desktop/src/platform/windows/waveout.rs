@@ -77,6 +77,15 @@ impl WaveoutDevice {
             if result != Media::MMSYSERR_NOERROR {
                 panic!("Failed to open waveout: Error: {}", result);
             }
+
+            for audio_header in &mut this.audio_headers {
+                let audio_header_ptr = audio_header as *mut WAVEHDR;
+
+                let result = waveOutPrepareHeader(this.handle, audio_header_ptr, size_of::<WAVEHDR>() as u32);
+                if result != MMSYSERR_NOERROR {
+                    panic!("Error preparing header: {}", result);
+                }
+            }
         }
 
         this
@@ -98,12 +107,6 @@ impl WaveoutDevice {
 
         unsafe {
             let audio_header_ptr = audio_header as *mut WAVEHDR;
-
-            let result =
-                waveOutUnprepareHeader(self.handle, audio_header_ptr, size_of::<WAVEHDR>() as u32);
-            if result != MMSYSERR_NOERROR {
-                panic!("Error unpreparing header: {}", result);
-            }
 
             let result =
                 waveOutPrepareHeader(self.handle, audio_header_ptr, size_of::<WAVEHDR>() as u32);

@@ -24,7 +24,7 @@ impl UNROM {
 }
 
 impl Cartridge for UNROM {
-    fn ppu_read(&self, address: u16, ciram: &[u8]) -> u8 {
+    fn ppu_read(&mut self, address: u16, ciram: &[u8]) -> u8 {
         if (address & BIT_13) == BIT_13 {
             ciram[self.ppu_addr_to_ciram_addr(address) as usize]
         } else {
@@ -53,5 +53,9 @@ impl Cartridge for UNROM {
         if address >= 0x8000 {
             self.selected_bank = value & 0x0F;
         }
+    }
+
+    fn scanline(&mut self) -> bool {
+        false
     }
 }

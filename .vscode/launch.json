@@ -7,15 +7,34 @@
         {
             "type": "lldb",
             "request": "launch",
-            "name": "Debug executable 'nees'",
+            "name": "Debug unit tests in library 'nees'",
             "cargo": {
                 "args": [
-                    "build",
-                    "--bin=nees",
+                    "test",
+                    "--no-run",
+                    "--lib",
                     "--package=nees"
                 ],
                 "filter": {
                     "name": "nees",
+                    "kind": "lib"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug executable 'nees-desktop'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--bin=nees-desktop",
+                    "--package=nees-desktop"
+                ],
+                "filter": {
+                    "name": "nees-desktop",
                     "kind": "bin"
                 }
             },
@@ -25,16 +44,16 @@
         {
             "type": "lldb",
             "request": "launch",
-            "name": "Debug unit tests in executable 'nees'",
+            "name": "Debug unit tests in executable 'nees-desktop'",
             "cargo": {
                 "args": [
                     "test",
                     "--no-run",
-                    "--bin=nees",
-                    "--package=nees"
+                    "--bin=nees-desktop",
+                    "--package=nees-desktop"
                 ],
                 "filter": {
-                    "name": "nees",
+                    "name": "nees-desktop",
                     "kind": "bin"
                 }
             },

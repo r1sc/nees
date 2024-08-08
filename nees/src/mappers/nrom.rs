@@ -20,7 +20,7 @@ impl NROM {
 }
 
 impl Cartridge for NROM {
-    fn ppu_read(&self, address: u16, ciram: &[u8]) -> u8 {
+    fn ppu_read(&mut self, address: u16, ciram: &[u8]) -> u8 {
         if (address & BIT_13) == BIT_13 {
             ciram[self.nrom_ppu_addr_to_ciram_addr(address) as usize]
         } else {
@@ -45,5 +45,9 @@ impl Cartridge for NROM {
 
     fn cpu_write(&mut self, _address: u16, _value: u8) {
         // Do nothing
+    }
+
+    fn scanline(&mut self) -> bool {
+        false
     }
 }

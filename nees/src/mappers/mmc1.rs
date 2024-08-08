@@ -65,7 +65,7 @@ impl MMC1 {
 const BIT_13: u16 = 1 << 13;
 
 impl Cartridge for MMC1 {
-    fn ppu_read(&self, address: u16, ciram: &[u8]) -> u8 {
+    fn ppu_read(&mut self, address: u16, ciram: &[u8]) -> u8 {
         if (address & BIT_13) == BIT_13 {
             ciram[self.ppu_addr_to_ciram_addr(address) as usize]
         } else if self.ines.is_chr_ram {
@@ -174,5 +174,9 @@ impl Cartridge for MMC1 {
                 }
             }
         }
+    }
+
+    fn scanline(&mut self) -> bool {
+        false
     }
 }
