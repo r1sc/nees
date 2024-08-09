@@ -1,6 +1,15 @@
 use bitfield_struct::bitfield;
 
-use crate::{apu::APU, bus::Bus, cartridge::Cartridge, cpu, ines::INES, mappers, ppu::PPU};
+use crate::{
+    apu::APU,
+    bus::Bus,
+    cartridge::Cartridge,
+    cpu,
+    ines::INES,
+    mappers,
+    ppu::PPU,
+    reader_writer::{EasyReader, EasyWriter},
+};
 
 pub struct NesBus {
     cpu_ram: Vec<u8>,
@@ -24,6 +33,28 @@ impl NesBus {
             cpu_timer: 0,
             apu_timer: 0,
         }
+    }
+
+    fn save(&self, mut writer: &mut dyn std::io::Write) -> std::io::Result<()> {
+        writer.write_all(&self.cpu_ram)?;
+        self.cart.save(writer)?;
+        self.ppu.save(writer)?;
+        //self.apu.save(writer)?;
+        writer.write_u32(self.cpu_timer)?;
+        writer.write_u32(self.apu_timer)?;
+
+        Ok(())
+    }
+
+    fn load(&mut self, mut reader: &mut dyn std::io::Read) -> std::io::Result<()> {
+        reader.read_exact(&mut self.cpu_ram)?;
+        self.cart.load(reader)?;
+        self.ppu.load(reader)?;
+        //self.apu.load(reader)?;
+        self.cpu_timer = reader.read_u32()?;
+        self.apu_timer = reader.read_u32()?;
+
+        Ok(())
     }
 }
 
@@ -150,7 +181,11 @@ impl NES001 {
                     self.cpu.irq6502(&mut self.bus);
                 }
             }
-            if scanline > -1 && scanline <= 239 && self.bus.ppu.is_rending_enabled() && self.bus.cart.scanline() {
+            if scanline > -1
+                && scanline <= 239
+                && self.bus.ppu.is_rending_enabled()
+                && self.bus.cart.scanline()
+            {
                 self.cpu.irq6502(&mut self.bus);
             }
         }
@@ -158,5 +193,19 @@ impl NES001 {
 
     pub fn set_buttons_down(&mut self, controller: u8, state: &ControllerState) {
         self.bus.buttons_down[controller as usize] = state.0;
+    }
+
+    pub fn save(&self, writer: &mut dyn std::io::Write) -> std::io::Result<()> {
+        self.cpu.save(writer)?;
+        self.bus.save(writer)?;
+
+        Ok(())
+    }
+
+    pub fn load(&mut self, reader: &mut dyn std::io::Read) -> std::io::Result<()> {
+        self.cpu.load(reader)?;
+        self.bus.load(reader)?;
+
+        Ok(())
     }
 }

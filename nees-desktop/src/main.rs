@@ -1,5 +1,7 @@
 // #![windows_subsystem = "windows"]
 
+use std::io::BufWriter;
+
 use glow::HasContext;
 use nees::nes001;
 use nes001::ControllerState;
@@ -197,6 +199,16 @@ fn main() {
                 Key(38, down) => player1_controller_state.set_up(down),
                 Key(39, down) => player1_controller_state.set_right(down),
                 Key(40, down) => player1_controller_state.set_down(down),
+                Key(116, true) => {
+                    let save_path = format!("{}.sav", rom_path);
+                    let mut buf_writer = BufWriter::new(std::fs::File::create(&save_path).unwrap());
+                    nes.save(&mut buf_writer).unwrap();
+                }
+                Key(118, true) => {
+                    let save_path = format!("{}.sav", rom_path);
+                    let mut buf_reader = std::io::BufReader::new(std::fs::File::open(&save_path).unwrap());
+                    nes.load(&mut buf_reader).unwrap();
+                }
                 Close => {
                     running = false;
                 }

@@ -2,6 +2,7 @@ use crate::{
     bit_helpers::{SubType, MASK_16K},
     cartridge::Cartridge,
     ines::INES,
+    reader_writer::{EasyReader, EasyWriter},
 };
 
 #[allow(clippy::upper_case_acronyms)]
@@ -165,11 +166,7 @@ impl Cartridge for MMC3 {
                 self.irq_reload = true;
             }
         } else if address >= 0xE000 {
-            if address_even {
-                self.irq_enabled = false;
-            } else {
-                self.irq_enabled = true;
-            }
+            self.irq_enabled = !address_even;
         }
     }
 
@@ -187,5 +184,41 @@ impl Cartridge for MMC3 {
         } else {
             false
         }
+    }
+
+    fn save(&self, mut writer: &mut dyn std::io::Write) -> std::io::Result<()> {
+        writer.write_all(&self.ram)?;
+        writer.write_u8(self.mirroring)?;
+        writer.write_u8(self.bank_to_update)?;
+        writer.write_bool(self.prg_rom_bank_mode)?;
+        writer.write_bool(self.chr_a12_inversion)?;
+
+        writer.write_all(&self.chr_banks)?;
+        writer.write_all(&self.prg_banks)?;
+        writer.write_all(&self.registers)?;
+        writer.write_u8(self.irq_latch)?;
+        writer.write_u16(self.irq_counter)?;
+        writer.write_bool(self.irq_enabled)?;
+        writer.write_bool(self.irq_reload)?;
+
+        Ok(())
+    }
+
+    fn load(&mut self, mut reader: &mut dyn std::io::Read) -> std::io::Result<()> {
+        reader.read_exact(&mut self.ram)?;
+        self.mirroring = reader.read_u8()?;
+        self.bank_to_update = reader.read_u8()?;
+        self.prg_rom_bank_mode = reader.read_bool()?;
+        self.chr_a12_inversion = reader.read_bool()?;
+        
+        reader.read_exact(&mut self.chr_banks)?;
+        reader.read_exact(&mut self.prg_banks)?;
+        reader.read_exact(&mut self.registers)?;
+        self.irq_latch = reader.read_u8()?;
+        self.irq_counter = reader.read_u16()?;
+        self.irq_enabled = reader.read_bool()?;
+        self.irq_reload = reader.read_bool()?;
+
+        Ok(())
     }
 }

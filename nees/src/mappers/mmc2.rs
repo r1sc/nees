@@ -1,7 +1,7 @@
 use crate::{
-    bit_helpers::{SubType, MASK_16K},
+    bit_helpers::SubType,
     cartridge::Cartridge,
-    ines::INES,
+    ines::INES, reader_writer::{EasyReader, EasyWriter},
 };
 
 #[allow(clippy::upper_case_acronyms)]
@@ -121,5 +121,29 @@ impl Cartridge for MMC2 {
 
     fn scanline(&mut self) -> bool {
         false
+    }
+    
+    fn save(&self, mut writer: &mut dyn std::io::Write) -> std::io::Result<()> {
+        writer.write_u8(self.prg_rom_bank_select)?;
+        writer.write_u8(self.lower_fd_bank_select)?;
+        writer.write_u8(self.lower_fe_bank_select)?;
+        writer.write_u8(self.lower_latch)?;
+        writer.write_u8(self.upper_fd_bank_select)?;
+        writer.write_u8(self.upper_fe_bank_select)?;
+        writer.write_u8(self.upper_latch)?;
+        writer.write_u8(self.mirroring)?;
+        Ok(())
+    }
+    
+    fn load(&mut self, mut reader: &mut dyn std::io::Read) -> std::io::Result<()> {
+        self.prg_rom_bank_select = reader.read_u8()?;
+        self.lower_fd_bank_select = reader.read_u8()?;
+        self.lower_fe_bank_select = reader.read_u8()?;
+        self.lower_latch = reader.read_u8()?;
+        self.upper_fd_bank_select = reader.read_u8()?;
+        self.upper_fe_bank_select = reader.read_u8()?;
+        self.upper_latch = reader.read_u8()?;
+        self.mirroring = reader.read_u8()?;
+        Ok(())
     }
 }

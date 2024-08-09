@@ -2,7 +2,7 @@ use core::panic;
 
 use bitfield_struct::bitfield;
 
-use crate::bus::Bus;
+use crate::{bus::Bus, reader_writer::{EasyReader, EasyWriter}};
 
 #[bitfield(u8)]
 pub struct StatusRegister {
@@ -60,6 +60,32 @@ const TICKTABLE: [u32; 256] = [
 ];
 
 impl<T: Bus> MOS6502<T> {
+    pub fn save(&self, mut writer: &mut dyn std::io::Write) -> std::io::Result<()> {
+        writer.write_u16(self.pc)?;
+        writer.write_u8(self.a)?;
+        writer.write_u8(self.x)?;
+        writer.write_u8(self.y)?;
+        writer.write_u8(self.status.0)?;
+        writer.write_u8(self.sp)?;
+        writer.write_bool(self.penaltyaddr)?;
+        writer.write_bool(self.penaltyop)?;
+        writer.write_u32(self.clockticks)?;
+        Ok(())
+    }
+
+    pub fn load(&mut self, mut reader: &mut dyn std::io::Read) -> std::io::Result<()> {
+        self.pc = reader.read_u16()?;
+        self.a = reader.read_u8()?;
+        self.x = reader.read_u8()?;
+        self.y = reader.read_u8()?;
+        self.status = StatusRegister(reader.read_u8()?);
+        self.sp = reader.read_u8()?;
+        self.penaltyaddr = reader.read_bool()?;
+        self.penaltyop = reader.read_bool()?;
+        self.clockticks = reader.read_u32()?;
+        Ok(())
+    }
+
     fn read8(&mut self, bus: &mut T) -> u8 {
         let value = bus.cpu_read(self.pc);
         self.pc = self.pc.wrapping_add(1);

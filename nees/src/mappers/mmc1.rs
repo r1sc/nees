@@ -1,4 +1,4 @@
-use crate::{bit_helpers::SubType, cartridge::Cartridge, ines::INES};
+use crate::{bit_helpers::SubType, cartridge::Cartridge, ines::INES, reader_writer::{EasyReader, EasyWriter}};
 
 #[allow(clippy::upper_case_acronyms)]
 pub struct MMC1 {
@@ -178,5 +178,37 @@ impl Cartridge for MMC1 {
 
     fn scanline(&mut self) -> bool {
         false
+    }
+
+    fn save(&self, mut writer: &mut dyn std::io::Write) -> std::io::Result<()> {
+        writer.write_u8(self.control_reg)?;
+        writer.write_u8(self.sr)?;
+        writer.write_u8(self.shift_count)?;
+        writer.write_u8(self.chr_bank_4_lo)?;
+        writer.write_u8(self.chr_bank_4_hi)?;
+        writer.write_u8(self.chr_bank_8)?;
+        writer.write_u8(self.prg_bank_lo)?;
+        writer.write_u8(self.prg_bank_hi)?;
+        writer.write_u8(self.prg_bank_32)?;
+        writer.write_u8(self.mirroring)?;
+        writer.write_all(&self.ram)?;
+
+        Ok(())
+    }
+
+    fn load(&mut self, mut reader: &mut dyn std::io::Read) -> std::io::Result<()> {
+        self.control_reg = reader.read_u8()?;
+        self.sr = reader.read_u8()?;
+        self.shift_count = reader.read_u8()?;
+        self.chr_bank_4_lo = reader.read_u8()?;
+        self.chr_bank_4_hi = reader.read_u8()?;
+        self.chr_bank_8 = reader.read_u8()?;
+        self.prg_bank_lo = reader.read_u8()?;
+        self.prg_bank_hi = reader.read_u8()?;
+        self.prg_bank_32 = reader.read_u8()?;
+        self.mirroring = reader.read_u8()?;
+        reader.read_exact(&mut self.ram)?;
+        
+        Ok(())
     }
 }

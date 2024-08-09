@@ -1,3 +1,5 @@
+mod reader_writer;
+
 mod apu;
 mod bit_helpers;
 mod bus;

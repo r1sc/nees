@@ -1,6 +1,6 @@
 use bitfield_struct::bitfield;
 
-use crate::cartridge::Cartridge;
+use crate::{cartridge::Cartridge, reader_writer::{EasyReader, EasyWriter}};
 
 #[bitfield(u8)]
 struct PPUCTRL {
@@ -71,6 +71,24 @@ struct OAMEntry {
     pub tile_index: u8,
     pub attributes: u8,
     pub x: u8,
+}
+
+impl OAMEntry {
+    pub fn save(&self, mut writer: &mut dyn std::io::Write) -> std::io::Result<()> {
+        writer.write_u8(self.y)?;
+        writer.write_u8(self.tile_index)?;
+        writer.write_u8(self.attributes)?;
+        writer.write_u8(self.x)?;
+        Ok(())
+    }
+
+    pub fn load(&mut self, mut reader: &mut dyn std::io::Read) -> std::io::Result<()> {
+        self.y = reader.read_u8()?;
+        self.tile_index = reader.read_u8()?;
+        self.attributes = reader.read_u8()?;
+        self.x = reader.read_u8()?;
+        Ok(())
+    }
 }
 
 const PALETTE_COLORS: [u8; 192] = [
@@ -160,6 +178,74 @@ impl PPU {
             attrib_1: 0,
             nametable_address: NametableAddress(0),
         }
+    }
+
+    pub fn save(&self, mut writer: &mut dyn std::io::Write) -> std::io::Result<()> {
+        for entry in &self.oam_entries {
+            entry.save(writer)?;
+        }
+        writer.write_u8(self.oam_addr)?;
+        writer.write_bool(self.addr_latch)?;
+        writer.write_all(&self.palette)?;
+        writer.write_all(&self.ciram)?;
+        writer.write_u8(self.fine_x_scroll)?;
+        writer.write_u8(self.status.0)?;
+        writer.write_u8(self.ctrl.0)?;
+        writer.write_u8(self.mask.0)?;
+        writer.write_u16(self.t.0)?;
+        writer.write_u16(self.v.0)?;
+        writer.write_u8(self.ppudata_buffer)?;
+        writer.write_u8(self.next_tile)?;
+        writer.write_u8(self.next_pattern_lsb)?;
+        writer.write_u8(self.next_pattern_msb)?;
+        writer.write_u16(self.pattern_plane_0)?;
+        writer.write_u16(self.pattern_plane_1)?;
+        writer.write_all(&self.sprite_lsb)?;
+        writer.write_all(&self.sprite_msb)?;
+        writer.write_u8(self.num_sprites_on_row as u8)?;
+        for entry in &self.temp_oam {
+            entry.save(writer)?;
+        }
+        writer.write_u8(self.next_attribute)?;
+        writer.write_u16(self.attrib_0)?;
+        writer.write_u16(self.attrib_1)?;
+        writer.write_u16(self.nametable_address.0)?;
+
+        Ok(())
+    }
+
+    pub fn load(&mut self, mut reader: &mut dyn std::io::Read) -> std::io::Result<()> {
+        for entry in &mut self.oam_entries {
+            entry.load(reader)?;
+        }
+        self.oam_addr = reader.read_u8()?;
+        self.addr_latch = reader.read_bool()?;
+        reader.read_exact(&mut self.palette)?;
+        reader.read_exact(&mut self.ciram)?;
+        self.fine_x_scroll = reader.read_u8()?;
+        self.status.0 = reader.read_u8()?;
+        self.ctrl.0 = reader.read_u8()?;
+        self.mask.0 = reader.read_u8()?;
+        self.t.0 = reader.read_u16()?;
+        self.v.0 = reader.read_u16()?;
+        self.ppudata_buffer = reader.read_u8()?;
+        self.next_tile = reader.read_u8()?;
+        self.next_pattern_lsb = reader.read_u8()?;
+        self.next_pattern_msb = reader.read_u8()?;
+        self.pattern_plane_0 = reader.read_u16()?;
+        self.pattern_plane_1 = reader.read_u16()?;
+        reader.read_exact(&mut self.sprite_lsb)?;
+        reader.read_exact(&mut self.sprite_msb)?;
+        self.num_sprites_on_row = reader.read_u8()? as usize;
+        for entry in &mut self.temp_oam {
+            entry.load(reader)?;
+        }
+        self.next_attribute = reader.read_u8()?;
+        self.attrib_0 = reader.read_u16()?;
+        self.attrib_1 = reader.read_u16()?;
+        self.nametable_address.0 = reader.read_u16()?;
+
+        Ok(())
     }
 
     pub fn is_rending_enabled(&self) -> bool {
