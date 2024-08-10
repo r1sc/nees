@@ -1,5 +1,4 @@
 use crate::{
-    bit_helpers::{SubType, MASK_16K},
     cartridge::Cartridge,
     ines::INES,
     reader_writer::{EasyReader, EasyWriter},
@@ -25,8 +24,6 @@ pub struct MMC3 {
 
 impl MMC3 {
     pub fn new(ines: INES) -> Self {
-        let prg_rom_size_16k_chunks = ines.prg_rom_size_16k_chunks;
-
         let prg_banks = [
             0,
             1,
@@ -54,7 +51,7 @@ impl MMC3 {
     }
 
     fn ppu_addr_to_ciram_addr(&self, ppuaddr: u16) -> u16 {
-        let mut a10_shift_count = match self.mirroring {
+        let a10_shift_count = match self.mirroring {
             0 => 10,
             _ => 11,
         };
@@ -134,7 +131,7 @@ impl Cartridge for MMC3 {
                 } else {
                     self.chr_banks[0] = self.registers[0] & 0xFE;
                     self.chr_banks[1] = (self.registers[0] & 0xFE) + 1;
-                    self.chr_banks[2] = (self.registers[1] & 0xFE);
+                    self.chr_banks[2] = self.registers[1] & 0xFE;
                     self.chr_banks[3] = (self.registers[1] & 0xFE) + 1;
                     self.chr_banks[4] = self.registers[2];
                     self.chr_banks[5] = self.registers[3];

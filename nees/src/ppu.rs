@@ -311,11 +311,11 @@ impl PPU {
         if address >= 0x3F00 && address <= 0x3FFF {
             // Palette control
             let index = address & 0x3;
-            return self.palette[if index == 0 {
+            self.palette[if index == 0 {
                 0
             } else {
                 (address & 0x1F) as usize
-            }];
+            }]
         } else {
             cart.ppu_read(address, &self.ciram)
         }

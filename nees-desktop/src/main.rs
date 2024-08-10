@@ -1,4 +1,4 @@
-// #![windows_subsystem = "windows"]
+//#![windows_subsystem = "windows"]
 
 use std::io::BufWriter;
 
@@ -51,7 +51,7 @@ fn slice_to_u8_slice<'a, T>(data: &[T]) -> &'a [u8] {
 }
 
 fn main() {
-    let rom_path = "roms/smb3.nes";
+    let rom_path = "roms/punchout.nes";
     let mut nes = nes001::NES001::from_rom(&std::fs::read(rom_path).unwrap());
 
     let mut player1_controller_state: ControllerState = ControllerState::new();
@@ -176,6 +176,7 @@ fn main() {
     let mut running = true;
 
     let mut gamepad = gamepad::Gamepad::new();
+    
 
     while running {
         wnd.pump_events();
@@ -183,6 +184,8 @@ fn main() {
 
         while let Some(event) = wnd.get_event() {
             use platform::window::WindowEvents::*;
+            use platform::keys::*;
+
             match event {
                 Resize(width, height, size) => unsafe {
                     gl.viewport(width / 2 - size / 2, height / 2 - size / 2, size, size);
@@ -195,16 +198,16 @@ fn main() {
                 Key(b'W', down) => player1_controller_state.set_start(down),
                 Key(b'A', down) => player1_controller_state.set_b(down),
                 Key(b'S', down) => player1_controller_state.set_a(down),
-                Key(37, down) => player1_controller_state.set_left(down),
-                Key(38, down) => player1_controller_state.set_up(down),
-                Key(39, down) => player1_controller_state.set_right(down),
-                Key(40, down) => player1_controller_state.set_down(down),
-                Key(116, true) => {
+                Key(ARROW_LEFT, down) => player1_controller_state.set_left(down),
+                Key(ARROW_UP, down) => player1_controller_state.set_up(down),
+                Key(ARROW_RIGHT, down) => player1_controller_state.set_right(down),
+                Key(ARROW_DOWN, down) => player1_controller_state.set_down(down),
+                Key(F5, true) => {
                     let save_path = format!("{}.sav", rom_path);
                     let mut buf_writer = BufWriter::new(std::fs::File::create(&save_path).unwrap());
                     nes.save(&mut buf_writer).unwrap();
                 }
-                Key(118, true) => {
+                Key(F7, true) => {
                     let save_path = format!("{}.sav", rom_path);
                     let mut buf_reader = std::io::BufReader::new(std::fs::File::open(&save_path).unwrap());
                     nes.load(&mut buf_reader).unwrap();

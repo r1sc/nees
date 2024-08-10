@@ -51,11 +51,11 @@ impl Cartridge for NROM {
         false
     }
     
-    fn save(&self, writer: &mut dyn std::io::Write) -> std::io::Result<()> {
+    fn save(&self, _writer: &mut dyn std::io::Write) -> std::io::Result<()> {
         Ok(())
     }
     
-    fn load(&mut self, reader: &mut dyn std::io::Read) -> std::io::Result<()> {
+    fn load(&mut self, _reader: &mut dyn std::io::Read) -> std::io::Result<()> {
         Ok(())
     }
 }

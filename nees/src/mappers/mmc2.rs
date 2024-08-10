@@ -1,7 +1,8 @@
 use crate::{
     bit_helpers::SubType,
     cartridge::Cartridge,
-    ines::INES, reader_writer::{EasyReader, EasyWriter},
+    ines::INES,
+    reader_writer::{EasyReader, EasyWriter},
 };
 
 #[allow(clippy::upper_case_acronyms)]
@@ -19,7 +20,6 @@ pub struct MMC2 {
 
 impl MMC2 {
     pub fn new(ines: INES) -> Self {
-        let prg_rom_size_16k_chunks = ines.prg_rom_size_16k_chunks;
         Self {
             ines,
             prg_rom_bank_select: 0,
@@ -34,7 +34,7 @@ impl MMC2 {
     }
 
     fn ppu_addr_to_ciram_addr(&self, ppuaddr: u16) -> u16 {
-        let mut a10_shift_count = match self.mirroring {
+        let a10_shift_count = match self.mirroring {
             0 => 10,
             _ => 11,
         };
@@ -49,25 +49,21 @@ impl Cartridge for MMC2 {
         if (address & BIT_13) == BIT_13 {
             ciram[self.ppu_addr_to_ciram_addr(address) as usize]
         } else {
-            let mut chr_bank = 0;
-            let mut value = 0;
-
-            if address <= 0x0FFF {
-                if self.lower_latch == 0xFD {
-                    chr_bank = self.lower_fd_bank_select;
+            let value = if address <= 0x0FFF {
+                let chr_bank = if self.lower_latch == 0xFD {
+                    self.lower_fd_bank_select
                 } else {
-                    chr_bank = self.lower_fe_bank_select;
-                }
-                value = self.ines.chr_rom[(chr_bank as usize) * 0x1000 + address as usize];
+                    self.lower_fe_bank_select
+                };
+                self.ines.chr_rom[(chr_bank as usize) * 0x1000 + address as usize]
             } else {
-                if self.upper_latch == 0xFD {
-                    chr_bank = self.upper_fd_bank_select;
+                let chr_bank = if self.upper_latch == 0xFD {
+                    self.upper_fd_bank_select
                 } else {
-                    chr_bank = self.upper_fe_bank_select;
-                }
-                value =
-                    self.ines.chr_rom[(chr_bank as usize) * 0x1000 + (address & 0xFFF) as usize];
-            }
+                    self.upper_fe_bank_select
+                };
+                self.ines.chr_rom[(chr_bank as usize) * 0x1000 + (address & 0xFFF) as usize]
+            };
 
             if address == 0xFD8 {
                 self.lower_latch = 0xFD;
@@ -122,7 +118,7 @@ impl Cartridge for MMC2 {
     fn scanline(&mut self) -> bool {
         false
     }
-    
+
     fn save(&self, mut writer: &mut dyn std::io::Write) -> std::io::Result<()> {
         writer.write_u8(self.prg_rom_bank_select)?;
         writer.write_u8(self.lower_fd_bank_select)?;
@@ -134,7 +130,7 @@ impl Cartridge for MMC2 {
         writer.write_u8(self.mirroring)?;
         Ok(())
     }
-    
+
     fn load(&mut self, mut reader: &mut dyn std::io::Read) -> std::io::Result<()> {
         self.prg_rom_bank_select = reader.read_u8()?;
         self.lower_fd_bank_select = reader.read_u8()?;

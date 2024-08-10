@@ -96,7 +96,7 @@ impl Bus for NesBus {
             self.controller_status[1] = self.buttons_down[1];
         } else if (address >= 0x4000 && address <= 0x4013) || address == 0x4015 || address == 0x4017
         {
-            self.apu.write_reg(address, value);
+            self.apu.write_reg(address, value, &mut *self.cart);
         } else if address >= 0x4000 {
             // Cart
             self.cart.cpu_write(address, value);
@@ -166,11 +166,11 @@ impl NES001 {
                 }
 
                 if self.bus.apu_timer == 2 {
-                    self.bus.apu.tick_triangle();
+                    self.bus.apu.tick_triangle(&mut *self.bus.cart);
                 }
 
                 if self.bus.apu_timer == 5 {
-                    self.bus.apu.tick_triangle();
+                    self.bus.apu.tick_triangle(&mut *self.bus.cart);
                     self.bus.apu.tick(scanline as i16, waveout_callback);
                     self.bus.apu_timer = 0;
                 } else {
@@ -198,6 +198,7 @@ impl NES001 {
     pub fn save(&self, writer: &mut dyn std::io::Write) -> std::io::Result<()> {
         self.cpu.save(writer)?;
         self.bus.save(writer)?;
+        self.bus.apu.save(writer)?;
 
         Ok(())
     }
@@ -205,6 +206,7 @@ impl NES001 {
     pub fn load(&mut self, reader: &mut dyn std::io::Read) -> std::io::Result<()> {
         self.cpu.load(reader)?;
         self.bus.load(reader)?;
+        self.bus.apu.load(reader)?;
 
         Ok(())
     }
