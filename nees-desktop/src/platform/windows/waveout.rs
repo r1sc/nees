@@ -16,7 +16,9 @@ pub struct WaveoutDevice {
     handle: HWAVEOUT,
     audio_headers: Vec<WAVEHDR>,
     queue: VecDeque<usize>,
-    pub buffers: Vec<Vec<i16>>,
+    buffers: Vec<Vec<i16>>,
+    current_buffer_pos: usize,
+    buffer_size: usize
 }
 
 impl WaveoutDevice {
@@ -63,6 +65,8 @@ impl WaveoutDevice {
             queue,
             audio_headers,
             buffers,
+            buffer_size,
+            current_buffer_pos: 0
         });
 
         unsafe {
@@ -120,8 +124,16 @@ impl WaveoutDevice {
         }
     }
 
-    pub fn get_current_buffer(&mut self) -> Option<usize> {
-        self.queue.front().copied()
+    pub fn push_sample(&mut self, sample: i16) {
+        if let Some(current_buffer) = self.queue.front() {
+            self.buffers[*current_buffer][self.current_buffer_pos] = sample;
+            self.current_buffer_pos += 1;
+
+            if self.current_buffer_pos >= self.buffer_size {
+                self.current_buffer_pos = 0;
+                self.queue_buffer();
+            }
+        }
     }
 }
 

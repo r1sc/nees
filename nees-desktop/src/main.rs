@@ -5,10 +5,10 @@ use std::io::BufWriter;
 use glow::HasContext;
 use nees::nes001;
 use nes001::ControllerState;
+use platform::window::Menu;
 
-mod platform;
 mod gamepad;
-
+mod platform;
 
 fn load_shader(gl: &glow::Context, shader_type: u32, source: &str) -> glow::Shader {
     unsafe {
@@ -51,37 +51,49 @@ fn slice_to_u8_slice<'a, T>(data: &[T]) -> &'a [u8] {
 }
 
 fn main() {
-    let rom_path = "roms/punchout.nes";
+    let rom_path = "roms/smb3.nes";
     let mut nes = nes001::NES001::from_rom(&std::fs::read(rom_path).unwrap());
 
     let mut player1_controller_state: ControllerState = ControllerState::new();
     let mut player2_controller_state: ControllerState = ControllerState::new();
 
     //*** AUDIO STUFF */
-    let mut buffer_pos = 0;
-    let mut buffer = Some(0);
     let mut w = platform::waveout::WaveoutDevice::new(8, 15720, 262);
-
     let mut waveout_callback = move |sample: i16| {
-        if buffer.is_none() {
-            if let Some(b) = w.get_current_buffer() {
-                buffer = Some(b);
-                buffer_pos = 0;
-            }
-        }
-
-        if let Some(current_buffer) = buffer {
-            w.buffers[current_buffer][buffer_pos] = sample;
-            buffer_pos += 1;
-
-            if buffer_pos == 262 {
-                w.queue_buffer();
-                buffer = None;
-            }
-        }
+        w.push_sample(sample);
     };
 
     let mut wnd = platform::window::Window::new();
+    wnd.add_menus(&[
+        Menu::Popout {
+            title: "File",
+            children: &[
+                Menu::Item {
+                    id: 1,
+                    title: "Load ROM...",
+                },
+                Menu::Separator,
+                Menu::Item {
+                    id: 2,
+                    title: "Exit",
+                },
+            ],
+        },
+        Menu::Popout {
+            title: "Options",
+            children: &[
+                Menu::Item {
+                    id: 3,
+                    title: "Save State\tF5",
+                },
+                Menu::Item {
+                    id: 4,
+                    title: "Load State\tF7",
+                },
+            ],
+        },
+    ]);
+
     let gl = wnd.create_gl_surface();
 
     let program = load_program(&gl, &std::fs::read_to_string("shaders/crt.glsl").unwrap());
@@ -176,15 +188,17 @@ fn main() {
     let mut running = true;
 
     let mut gamepad = gamepad::Gamepad::new();
-    
 
     while running {
         wnd.pump_events();
-        gamepad.update_controller_state(&mut [&mut player1_controller_state, &mut player2_controller_state]);
+        gamepad.update_controller_state(&mut [
+            &mut player1_controller_state,
+            &mut player2_controller_state,
+        ]);
 
         while let Some(event) = wnd.get_event() {
-            use platform::window::WindowEvents::*;
             use platform::keys::*;
+            use platform::window::WindowEvents::*;
 
             match event {
                 Resize(width, height, size) => unsafe {
@@ -203,14 +217,16 @@ fn main() {
                 Key(ARROW_RIGHT, down) => player1_controller_state.set_right(down),
                 Key(ARROW_DOWN, down) => player1_controller_state.set_down(down),
                 Key(F5, true) => {
-                    let save_path = format!("{}.sav", rom_path);
-                    let mut buf_writer = BufWriter::new(std::fs::File::create(&save_path).unwrap());
-                    nes.save(&mut buf_writer).unwrap();
+                    save_state(rom_path, &nes);
                 }
                 Key(F7, true) => {
-                    let save_path = format!("{}.sav", rom_path);
-                    let mut buf_reader = std::io::BufReader::new(std::fs::File::open(&save_path).unwrap());
-                    nes.load(&mut buf_reader).unwrap();
+                    load_state(rom_path, &mut nes);
+                }
+                Command { which: 3 } => {
+                    save_state(rom_path, &nes);
+                }
+                Command { which: 4 } => {
+                    load_state(rom_path, &mut nes);
                 }
                 Close => {
                     running = false;
@@ -271,4 +287,16 @@ fn main() {
 
         std::thread::sleep(std::time::Duration::from_millis(1));
     }
+}
+
+fn load_state(rom_path: &str, nes: &mut nes001::NES001) {
+    let save_path = format!("{}.sav", rom_path);
+    let mut buf_reader = std::io::BufReader::new(std::fs::File::open(&save_path).unwrap());
+    nes.load(&mut buf_reader).unwrap();
+}
+
+fn save_state(rom_path: &str, nes: &nes001::NES001) {
+    let save_path = format!("{}.sav", rom_path);
+    let mut buf_writer = BufWriter::new(std::fs::File::create(&save_path).unwrap());
+    nes.save(&mut buf_writer).unwrap();
 }

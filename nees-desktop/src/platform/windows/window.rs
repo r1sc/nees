@@ -21,6 +21,11 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: 
         (WM_DESTROY, _) => {
             PostQuitMessage(0);
         }
+        (WM_COMMAND, Some(this)) => {
+            (*this).publish_event(WindowEvents::Command {
+                which: wparam.0 as u16,
+            });
+        }
         (WM_KEYDOWN, Some(this)) => {
             (*this).publish_event(WindowEvents::Key(wparam.0 as u8, true));
         }
@@ -55,12 +60,27 @@ pub enum WindowEvents {
     Close,
     Key(u8, bool),
     Resize(i32, i32, i32),
+    Command { which: u16 },
 }
-
 pub struct Window {
     hwnd: HWND,
     hdc: Option<HDC>,
     event_queue: VecDeque<WindowEvents>,
+}
+
+unsafe impl Send for Window {}
+unsafe impl Sync for Window {}
+
+pub enum Menu<'a> {
+    Popout {
+        title: &'a str,
+        children: &'a [Menu<'a>],
+    },
+    Separator,
+    Item {
+        id: usize,
+        title: &'a str,
+    },
 }
 
 impl Window {
@@ -230,7 +250,7 @@ impl Window {
     pub fn pump_events(&mut self) {
         unsafe {
             let mut msg = MSG::default();
-            if PeekMessageA(&mut msg, None, 0, 0, PM_REMOVE).as_bool() {
+            while PeekMessageA(&mut msg, None, 0, 0, PM_NOYIELD | PM_REMOVE).as_bool() {
                 if msg.message == WM_QUIT {
                     self.publish_event(WindowEvents::Close);
                 }
@@ -253,6 +273,60 @@ impl Window {
                 self.hwnd,
                 PCSTR::from_raw(cstr.as_bytes_with_nul().as_ptr()),
             );
+        }
+    }
+
+    fn add_menu_item(parent_menu: HMENU, menu_spec: &Menu) {
+        match menu_spec {
+            Menu::Popout { title, children } => {
+                let flags = MF_POPUP | MF_STRING;
+                let cstr = CString::new(*title).unwrap();
+                let menu = unsafe { CreateMenu().unwrap() };
+
+                unsafe {
+                    AppendMenuA(
+                        parent_menu,
+                        flags,
+                        menu.0 as usize,
+                        PCSTR::from_raw(cstr.as_ptr() as *const u8),
+                    )
+                    .unwrap();
+                }
+
+                for child in *children {
+                    Self::add_menu_item(menu, child);
+                }
+            }
+            Menu::Separator => unsafe {
+                AppendMenuA(parent_menu, MF_SEPARATOR, 0, PCSTR::null()).unwrap();
+            },
+            Menu::Item { id, title } => {
+                let flags = MF_STRING;
+                let cstr = CString::new(*title).unwrap();
+
+                unsafe {
+                    AppendMenuA(
+                        parent_menu,
+                        flags,
+                        *id,
+                        PCSTR::from_raw(cstr.as_ptr() as *const u8),
+                    )
+                    .unwrap();
+                }
+            }
+        }
+    }
+
+    pub fn add_menus(&self, menus: &[Menu]) {
+        let window_menu = unsafe { CreateMenu().unwrap() };
+
+        for menu in menus {
+            Self::add_menu_item(window_menu, menu);
+        }
+
+        unsafe {
+            SetMenu(self.hwnd, window_menu).unwrap();
+            DrawMenuBar(self.hwnd).unwrap();
         }
     }
 }
