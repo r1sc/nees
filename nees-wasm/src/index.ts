@@ -1,6 +1,6 @@
 import { make_renderer } from "./renderer";
-import { init, tick } from "../../pkg/nees_wasm";
-import wasminit from "../../pkg/nees_wasm";
+import { init, tick } from "../pkg/nees_wasm";
+import wasminit from "../pkg/nees_wasm";
 
 declare global {
     interface Window {

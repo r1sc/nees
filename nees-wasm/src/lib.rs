@@ -1,19 +1,13 @@
-mod utils;
-
 use nees::nes001::{self, ControllerState};
 use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen]
 extern "C" {
-    fn alert(s: &str);
     fn waveout_callback(sample: i16);
 }
-#[link_section = "framebuffer"]
-pub static FRAMEBUFFER: [u32; 256 * 240] = [0; 256 * 240];
 
 #[wasm_bindgen]
 pub fn init(rom: &[u8]) -> *mut nes001::NES001 {
-    utils::set_panic_hook();
     let nes = Box::new(nes001::NES001::from_rom(rom));
     Box::into_raw(nes)
 }
@@ -35,9 +29,4 @@ pub unsafe fn tick(nes: *mut nes001::NES001, framebuffer: &mut [u32], player1_bu
     nes.set_buttons_down(0, &player1_controller_state);
     nes.set_buttons_down(1, &player2_controller_state);
     nes.tick_frame(&mut waveout_callback, framebuffer);
-}
-
-#[wasm_bindgen]
-pub fn greet() {
-    alert("Hello, nees-wasm!");
 }

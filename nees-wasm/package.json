@@ -4,7 +4,7 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "start": "copy ..\\pkg\\nees_wasm_bg.wasm ..\\www & node serve.mjs"
+    "start": "copy .\\pkg\\nees_wasm_bg.wasm .\\www & node serve.mjs"
   },
   "author": "",
   "license": "ISC",
