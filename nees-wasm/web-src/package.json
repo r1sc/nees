@@ -1,0 +1,16 @@
+{
+  "name": "web-src",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "start": "copy ..\\pkg\\nees_wasm_bg.wasm ..\\www & node serve.mjs"
+  },
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@types/audioworklet": "^0.0.59",
+    "esbuild": "^0.23.1",
+    "typescript": "^5.0.0"
+  }
+}

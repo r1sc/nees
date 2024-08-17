@@ -7,4 +7,4 @@ edition = "2021"
 
 [dependencies]
 bitfield-struct = "0.8.0"
-byteorder = "1.4.3"
+anyhow = { version = "1.0", default-features = false }

@@ -19,14 +19,14 @@ impl LengthCounter {
         }
     }
 
-    pub fn save(&self, mut writer: &mut dyn std::io::Write) -> std::io::Result<()> {
+    pub fn save(&self, writer: &mut dyn EasyWriter) -> anyhow::Result<()> {
         writer.write_u8(self.value)?;
         writer.write_bool(self.halt)?;
 
         Ok(())
     }
 
-    pub fn load(&mut self, mut reader: &mut dyn std::io::Read) -> std::io::Result<()> {
+    pub fn load(&mut self, reader: &mut dyn EasyReader) -> anyhow::Result<()> {
         self.value = reader.read_u8()?;
         self.halt = reader.read_bool()?;
 

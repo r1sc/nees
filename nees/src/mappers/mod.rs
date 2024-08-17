@@ -1,12 +1,16 @@
-use crate::{cartridge::Cartridge, ines::INES};
+use crate::{
+    cartridge::CartridgeWithSaveLoad,
+    ines::INES,
+};
+use alloc::boxed::Box;
 
 mod mmc1;
-mod nrom;
-mod unrom;
 mod mmc2;
 mod mmc3;
+mod nrom;
+mod unrom;
 
-pub fn load_cart(ines: INES) -> Box<dyn Cartridge + Sync + Send> {
+pub fn load_cart(ines: INES) -> Box<dyn CartridgeWithSaveLoad> {
     match ines.mapper_no {
         0 => Box::new(nrom::NROM::new(ines)),
         1 => Box::new(mmc1::MMC1::new(ines)),

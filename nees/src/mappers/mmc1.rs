@@ -1,4 +1,9 @@
-use crate::{bit_helpers::SubType, cartridge::Cartridge, ines::INES, reader_writer::{EasyReader, EasyWriter}};
+use crate::{
+    bit_helpers::SubType,
+    cartridge::{Cartridge, CartridgeSaveLoad, CartridgeWithSaveLoad},
+    ines::INES,
+    reader_writer::{EasyReader, EasyWriter},
+};
 
 #[allow(clippy::upper_case_acronyms)]
 pub struct MMC1 {
@@ -179,8 +184,10 @@ impl Cartridge for MMC1 {
     fn scanline(&mut self) -> bool {
         false
     }
+}
 
-    fn save(&self, mut writer: &mut dyn std::io::Write) -> std::io::Result<()> {
+impl CartridgeSaveLoad for MMC1 {
+    fn save(&self, writer: &mut dyn EasyWriter) -> anyhow::Result<()> {
         writer.write_u8(self.control_reg)?;
         writer.write_u8(self.sr)?;
         writer.write_u8(self.shift_count)?;
@@ -196,7 +203,7 @@ impl Cartridge for MMC1 {
         Ok(())
     }
 
-    fn load(&mut self, mut reader: &mut dyn std::io::Read) -> std::io::Result<()> {
+    fn load(&mut self, reader: &mut dyn EasyReader) -> anyhow::Result<()> {
         self.control_reg = reader.read_u8()?;
         self.sr = reader.read_u8()?;
         self.shift_count = reader.read_u8()?;
@@ -208,7 +215,9 @@ impl Cartridge for MMC1 {
         self.prg_bank_32 = reader.read_u8()?;
         self.mirroring = reader.read_u8()?;
         reader.read_exact(&mut self.ram)?;
-        
+
         Ok(())
     }
 }
+
+impl CartridgeWithSaveLoad for MMC1 {}

@@ -129,14 +129,14 @@ impl Pulse {
         }
     }
 
-    pub fn save(&self, mut writer: &mut dyn std::io::Write) -> std::io::Result<()> {
+    pub fn save(&self, writer: &mut dyn EasyWriter) -> anyhow::Result<()> {
         writer.write_bool(self.enabled)?;
-        self.timer.save(&mut writer)?;
-        self.length_counter.save(&mut writer)?;
+        self.timer.save(writer)?;
+        self.length_counter.save(writer)?;
         writer.write_u8(self.sequence)?;
         writer.write_u8(self.sequencer_pos)?;
         writer.write_u8(self.current_output)?;
-        self.envelope.save(&mut writer)?;
+        self.envelope.save(writer)?;
 
         writer.write_bool(self.sweep_enabled)?;
         writer.write_u16(self.sweep_divider_current)?;
@@ -149,14 +149,14 @@ impl Pulse {
         Ok(())
     }
 
-    pub fn load(&mut self, mut reader: &mut dyn std::io::Read) -> std::io::Result<()> {
+    pub fn load(&mut self, reader: &mut dyn EasyReader) -> anyhow::Result<()> {
         self.enabled = reader.read_bool()?;
-        self.timer.load(&mut reader)?;
-        self.length_counter.load(&mut reader)?;
+        self.timer.load(reader)?;
+        self.length_counter.load(reader)?;
         self.sequence = reader.read_u8()?;
         self.sequencer_pos = reader.read_u8()?;
         self.current_output = reader.read_u8()?;
-        self.envelope.load(&mut reader)?;
+        self.envelope.load(reader)?;
 
         self.sweep_enabled = reader.read_bool()?;
         self.sweep_divider_current = reader.read_u16()?;

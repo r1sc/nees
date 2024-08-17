@@ -1,6 +1,4 @@
-use std::io::{BufReader, Cursor, Read};
-
-use byteorder::ReadBytesExt;
+use alloc::{vec, vec::Vec};
 
 #[allow(clippy::upper_case_acronyms)]
 pub struct INES {
@@ -14,9 +12,38 @@ pub struct INES {
     pub ppu_address_ciram_a10_shift_count: u8,
 }
 
+struct SimpleBinaryReader<'a> {
+    pos: usize,
+    data: &'a [u8],
+}
+
+impl<'a> SimpleBinaryReader<'a> {
+    fn new(data: &'a [u8]) -> Self {
+        Self { pos: 0, data }
+    }
+
+    fn read_u8(&mut self) -> Option<u8> {
+        let result = self.data.get(self.pos).copied();
+        self.pos += 1;
+        result
+    }
+
+    fn read_exact(&mut self, buf: &mut [u8]) -> Option<()> {
+        let len = buf.len();
+        buf.copy_from_slice(&self.data[self.pos..self.pos + len]);
+        self.pos += len;
+        Some(())
+    }
+
+    fn seek_relative(&mut self, offset: usize) -> Option<()> {
+        self.pos += offset;
+        Some(())
+    }
+}
+
 impl INES {
     pub fn new(rom_data: &[u8]) -> Self {
-        let mut f = BufReader::new(Cursor::new(rom_data));
+        let mut f = SimpleBinaryReader::new(rom_data);
         let mut nesbuf = [0_u8; 4];
         f.read_exact(&mut nesbuf)
             .expect("Failed to read NES header");

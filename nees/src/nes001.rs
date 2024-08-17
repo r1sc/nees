@@ -1,9 +1,10 @@
+use alloc::boxed::Box;
 use bitfield_struct::bitfield;
 
 use crate::{
     apu::APU,
     bus::Bus,
-    cartridge::Cartridge,
+    cartridge::CartridgeWithSaveLoad,
     cpu,
     ines::INES,
     mappers,
@@ -12,8 +13,8 @@ use crate::{
 };
 
 pub struct NesBus {
-    cpu_ram: Vec<u8>,
-    cart: Box<dyn Cartridge + Sync + Send>,
+    cpu_ram: [u8; 2048],
+    cart: Box<dyn CartridgeWithSaveLoad>,
     ppu: PPU,
     pub apu: APU,
     controller_status: [u8; 2],
@@ -22,10 +23,10 @@ pub struct NesBus {
     apu_timer: u32,
 }
 impl NesBus {
-    pub fn new(cart: Box<dyn Cartridge + Sync + Send>) -> Self {
+    pub fn new(cart: Box<dyn CartridgeWithSaveLoad>) -> Self {
         Self {
             cart,
-            cpu_ram: vec![0; 2048],
+            cpu_ram: [0; 2048],
             ppu: PPU::new(),
             apu: APU::new(),
             controller_status: [0, 0],
@@ -35,7 +36,7 @@ impl NesBus {
         }
     }
 
-    fn save(&self, mut writer: &mut dyn std::io::Write) -> std::io::Result<()> {
+    fn save(&self, writer: &mut dyn EasyWriter) -> anyhow::Result<()> {
         writer.write_all(&self.cpu_ram)?;
         self.cart.save(writer)?;
         self.ppu.save(writer)?;
@@ -46,7 +47,7 @@ impl NesBus {
         Ok(())
     }
 
-    fn load(&mut self, mut reader: &mut dyn std::io::Read) -> std::io::Result<()> {
+    fn load(&mut self, reader: &mut dyn EasyReader) -> anyhow::Result<()> {
         reader.read_exact(&mut self.cpu_ram)?;
         self.cart.load(reader)?;
         self.ppu.load(reader)?;
@@ -126,7 +127,6 @@ pub struct ControllerState {
 pub struct NES001 {
     cpu: cpu::MOS6502<NesBus>,
     bus: NesBus,
-    pub framebuffer: Vec<u32>,
 }
 
 impl NES001 {
@@ -135,25 +135,21 @@ impl NES001 {
         Self::new(cart)
     }
 
-    fn new(cart: Box<dyn Cartridge + Sync + Send>) -> Self {
+    fn new(cart: Box<dyn CartridgeWithSaveLoad>) -> Self {
         let mut bus = NesBus::new(cart);
         let mut cpu = cpu::MOS6502::new();
         cpu.reset(&mut bus);
 
-        Self {
-            bus,
-            cpu,
-            framebuffer: vec![0; 256 * 240],
-        }
+        Self { bus, cpu }
     }
 
-    pub fn tick_frame<T: FnMut(i16)>(&mut self, waveout_callback: &mut T) {
+    pub fn tick_frame<T: FnMut(i16)>(&mut self, waveout_callback: &mut T, framebuffer: &mut [u32]) {
         for scanline in -1..=260 {
             for dot in 0..=340 {
                 if self
                     .bus
                     .ppu
-                    .tick(scanline, dot, &mut self.framebuffer, &mut *self.bus.cart)
+                    .tick(scanline, dot, framebuffer, &mut *self.bus.cart)
                 {
                     self.cpu.nmi6502(&mut self.bus);
                 }
@@ -195,7 +191,7 @@ impl NES001 {
         self.bus.buttons_down[controller as usize] = state.0;
     }
 
-    pub fn save(&self, writer: &mut dyn std::io::Write) -> std::io::Result<()> {
+    pub fn save(&self, writer: &mut dyn EasyWriter) -> anyhow::Result<()> {
         self.cpu.save(writer)?;
         self.bus.save(writer)?;
         self.bus.apu.save(writer)?;
@@ -203,7 +199,7 @@ impl NES001 {
         Ok(())
     }
 
-    pub fn load(&mut self, reader: &mut dyn std::io::Read) -> std::io::Result<()> {
+    pub fn load(&mut self, reader: &mut dyn EasyReader) -> anyhow::Result<()> {
         self.cpu.load(reader)?;
         self.bus.load(reader)?;
         self.bus.apu.load(reader)?;

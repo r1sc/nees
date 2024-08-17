@@ -41,18 +41,18 @@ impl Envelope {
         }
     }
 
-    pub fn save(&self, mut writer: &mut dyn std::io::Write) -> std::io::Result<()> {
+    pub fn save(&self, writer: &mut dyn EasyWriter) -> anyhow::Result<()> {
         writer.write_bool(self.start)?;
-        self.timer.save(&mut writer)?;
+        self.timer.save(writer)?;
         writer.write_u8(self.decay_level)?;
         writer.write_bool(self.constant_volume)?;
 
         Ok(())
     }
 
-    pub fn load(&mut self, mut reader: &mut dyn std::io::Read) -> std::io::Result<()> {
+    pub fn load(&mut self, reader: &mut dyn EasyReader) -> anyhow::Result<()> {
         self.start = reader.read_bool()?;
-        self.timer.load(&mut reader)?;
+        self.timer.load(reader)?;
         self.decay_level = reader.read_u8()?;
         self.constant_volume = reader.read_bool()?;
 

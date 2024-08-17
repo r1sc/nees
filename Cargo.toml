@@ -3,5 +3,9 @@ resolver = "2"
 
 members = [
     "nees",
-    "nees-desktop"
+    "nees-desktop", 
+    "nees-sdl", 
+    "nees-glrenderer", 
+    "nees-std", 
+    "nees-wasm"
 ]

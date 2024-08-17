@@ -1,0 +1,13 @@
+[package]
+name = "nees-sdl"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+nees = { path = "../nees" }
+nees-std = { path = "../nees-std" }
+nees-glrenderer = { path = "../nees-glrenderer" }
+sdl2 = { version = "0.37.0", features = ["bundled"] }
+glow = "0.14.0"

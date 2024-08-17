@@ -1,54 +1,11 @@
 //#![windows_subsystem = "windows"]
 
-use std::io::BufWriter;
-
-use glow::HasContext;
 use nees::nes001;
 use nes001::ControllerState;
 use platform::window::Menu;
 
 mod gamepad;
 mod platform;
-
-fn load_shader(gl: &glow::Context, shader_type: u32, source: &str) -> glow::Shader {
-    unsafe {
-        let shader = gl.create_shader(shader_type).expect("Cannot create shader");
-
-        let source = format!(
-            "#version 300 es\n{}\n{}",
-            if shader_type == glow::VERTEX_SHADER {
-                "#define VS"
-            } else {
-                "#define FS"
-            },
-            source
-        );
-
-        gl.shader_source(shader, &source);
-        gl.compile_shader(shader);
-        if !gl.get_shader_compile_status(shader) {
-            panic!("{}", gl.get_shader_info_log(shader));
-        }
-        shader
-    }
-}
-
-fn load_program(gl: &glow::Context, src: &str) -> glow::Program {
-    unsafe {
-        let program = gl.create_program().expect("Cannot create program");
-        gl.attach_shader(program, load_shader(gl, glow::VERTEX_SHADER, src));
-        gl.attach_shader(program, load_shader(gl, glow::FRAGMENT_SHADER, src));
-        gl.link_program(program);
-        if !gl.get_program_link_status(program) {
-            panic!("{}", gl.get_program_info_log(program));
-        }
-        program
-    }
-}
-
-fn slice_to_u8_slice<'a, T>(data: &[T]) -> &'a [u8] {
-    unsafe { std::slice::from_raw_parts(data.as_ptr() as *const u8, std::mem::size_of_val(data)) }
-}
 
 fn main() {
     let rom_path = "roms/smb3.nes";
@@ -63,7 +20,7 @@ fn main() {
         w.push_sample(sample);
     };
 
-    let mut wnd = platform::window::Window::new();
+    let mut wnd = platform::window::Window::new("Nees", 512, 512);
     wnd.add_menus(&[
         Menu::Popout {
             title: "File",
@@ -95,89 +52,7 @@ fn main() {
     ]);
 
     let gl = wnd.create_gl_surface();
-
-    let program = load_program(&gl, &std::fs::read_to_string("shaders/crt.glsl").unwrap());
-    unsafe {
-        gl.use_program(Some(program));
-
-        gl.enable(glow::TEXTURE_2D);
-        gl.disable(glow::CULL_FACE);
-
-        let texture = gl.create_texture().unwrap();
-        gl.bind_texture(glow::TEXTURE_2D, Some(texture));
-        gl.tex_image_2d(
-            glow::TEXTURE_2D,
-            0,
-            glow::RGB as i32,
-            256,
-            240,
-            0,
-            glow::RGB,
-            glow::UNSIGNED_BYTE,
-            None,
-        );
-        gl.tex_parameter_i32(
-            glow::TEXTURE_2D,
-            glow::TEXTURE_MIN_FILTER,
-            glow::LINEAR as i32,
-        );
-        gl.tex_parameter_i32(
-            glow::TEXTURE_2D,
-            glow::TEXTURE_MAG_FILTER,
-            glow::LINEAR as i32,
-        );
-        gl.tex_parameter_i32(
-            glow::TEXTURE_2D,
-            glow::TEXTURE_WRAP_S,
-            glow::CLAMP_TO_EDGE as i32,
-        );
-        gl.tex_parameter_i32(
-            glow::TEXTURE_2D,
-            glow::TEXTURE_WRAP_T,
-            glow::CLAMP_TO_EDGE as i32,
-        );
-        gl.tex_image_2d(
-            glow::TEXTURE_2D,
-            0,
-            glow::RGBA as i32,
-            256,
-            240,
-            0,
-            glow::BGRA,
-            glow::UNSIGNED_BYTE,
-            None,
-        );
-
-        let vao = gl.create_vertex_array().unwrap();
-        gl.bind_vertex_array(Some(vao));
-
-        let vertices: [f32; 16] = [
-            -1.0, 1.0, 0.0, 0.0, 1.0, 1.0, 1.0, 0.0, 1.0, -1.0, 1.0, 1.0, -1.0, -1.0, 0.0, 1.0,
-        ];
-
-        let vbo = gl.create_buffer().unwrap();
-        gl.bind_buffer(glow::ARRAY_BUFFER, Some(vbo));
-        gl.buffer_data_u8_slice(
-            glow::ARRAY_BUFFER,
-            slice_to_u8_slice(&vertices),
-            glow::STATIC_DRAW,
-        );
-
-        let indices: [u16; 6] = [0, 1, 2, 0, 2, 3];
-        let ibo = gl.create_buffer().unwrap();
-        gl.bind_buffer(glow::ELEMENT_ARRAY_BUFFER, Some(ibo));
-        gl.buffer_data_u8_slice(
-            glow::ELEMENT_ARRAY_BUFFER,
-            slice_to_u8_slice(&indices),
-            glow::STATIC_DRAW,
-        );
-
-        gl.enable_vertex_attrib_array(0);
-        gl.vertex_attrib_pointer_f32(0, 2, glow::FLOAT, false, 4 * 4, 0);
-
-        gl.enable_vertex_attrib_array(1);
-        gl.vertex_attrib_pointer_f32(1, 2, glow::FLOAT, false, 4 * 4, 2 * 4);
-    }
+    nees_glrenderer::init(&gl);
 
     let dt_target = std::time::Duration::from_micros(16666);
     let mut last_time = std::time::Instant::now();
@@ -188,6 +63,7 @@ fn main() {
     let mut running = true;
 
     let mut gamepad = gamepad::Gamepad::new();
+    let mut framebuffer: Vec<u32> = vec![0; 256 * 240];
 
     while running {
         wnd.pump_events();
@@ -201,13 +77,10 @@ fn main() {
             use platform::window::WindowEvents::*;
 
             match event {
-                Resize(width, height, size) => unsafe {
-                    gl.viewport(width / 2 - size / 2, height / 2 - size / 2, size, size);
-                    gl.clear(glow::COLOR_BUFFER_BIT);
+                Resize(width, height) => {
+                    nees_glrenderer::resize(&gl, width, height);
                     wnd.swap_buffers();
-                    gl.clear(glow::COLOR_BUFFER_BIT);
-                    wnd.swap_buffers();
-                },
+                }
                 Key(b'Q', down) => player1_controller_state.set_select(down),
                 Key(b'W', down) => player1_controller_state.set_start(down),
                 Key(b'A', down) => player1_controller_state.set_b(down),
@@ -217,16 +90,16 @@ fn main() {
                 Key(ARROW_RIGHT, down) => player1_controller_state.set_right(down),
                 Key(ARROW_DOWN, down) => player1_controller_state.set_down(down),
                 Key(F5, true) => {
-                    save_state(rom_path, &nes);
+                    nees_std::save_state(rom_path, &nes);
                 }
                 Key(F7, true) => {
-                    load_state(rom_path, &mut nes);
+                    nees_std::load_state(rom_path, &mut nes);
                 }
                 Command { which: 3 } => {
-                    save_state(rom_path, &nes);
+                    nees_std::save_state(rom_path, &nes);
                 }
                 Command { which: 4 } => {
-                    load_state(rom_path, &mut nes);
+                    nees_std::load_state(rom_path, &mut nes);
                 }
                 Close => {
                     running = false;
@@ -252,51 +125,23 @@ fn main() {
             nes_frames = 0;
             sec_accum = std::time::Duration::ZERO;
 
-            wnd.set_title(format!("NES Emulator - FPS: {}", nes_fps).as_str());
+            wnd.set_title(format!("Nees - FPS: {}", nes_fps).as_str());
         }
 
         while accum >= dt_target {
             nes.set_buttons_down(0, &player1_controller_state);
             nes.set_buttons_down(1, &player2_controller_state);
-            nes.tick_frame(&mut waveout_callback);
+            nes.tick_frame(&mut waveout_callback, &mut framebuffer);
 
             accum -= dt_target;
 
             nes_frames += 1;
         }
 
-        unsafe {
-            gl.clear(glow::COLOR_BUFFER_BIT);
-
-            let u8_pixels = slice_to_u8_slice(&nes.framebuffer);
-            gl.tex_sub_image_2d(
-                glow::TEXTURE_2D,
-                0,
-                0,
-                0,
-                256,
-                240,
-                glow::BGRA,
-                glow::UNSIGNED_BYTE,
-                glow::PixelUnpackData::Slice(u8_pixels),
-            );
-            gl.draw_elements(glow::TRIANGLES, 6, glow::UNSIGNED_SHORT, 0);
-        }
+        nees_glrenderer::render(&gl, &framebuffer);
 
         wnd.swap_buffers();
 
         std::thread::sleep(std::time::Duration::from_millis(1));
     }
-}
-
-fn load_state(rom_path: &str, nes: &mut nes001::NES001) {
-    let save_path = format!("{}.sav", rom_path);
-    let mut buf_reader = std::io::BufReader::new(std::fs::File::open(&save_path).unwrap());
-    nes.load(&mut buf_reader).unwrap();
-}
-
-fn save_state(rom_path: &str, nes: &nes001::NES001) {
-    let save_path = format!("{}.sav", rom_path);
-    let mut buf_writer = BufWriter::new(std::fs::File::create(&save_path).unwrap());
-    nes.save(&mut buf_writer).unwrap();
 }

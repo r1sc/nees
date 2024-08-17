@@ -1,4 +1,4 @@
-use crate::{bus::{self, Bus}, cartridge::Cartridge, nes001::NesBus, reader_writer::{EasyReader, EasyWriter}};
+use crate::{cartridge::CartridgeWithSaveLoad, reader_writer::{EasyReader, EasyWriter}};
 
 use super::timer::Timer;
 
@@ -6,6 +6,7 @@ const DMC_RATE_TABLE: [u16; 16] = [
     428, 380, 340, 320, 286, 254, 226, 214, 190, 160, 142, 128, 106, 84, 72, 54,
 ];
 
+#[allow(clippy::upper_case_acronyms)]
 pub struct DMC {
     pub enabled: bool,
     pub irq_enabled: bool,
@@ -56,7 +57,7 @@ impl DMC {
         self.sample_bytes_remaining = self.sample_length;
     }
 
-    pub fn tick_memory_reader(&mut self, cart: &mut dyn Cartridge) {
+    pub fn tick_memory_reader(&mut self, cart: &mut dyn CartridgeWithSaveLoad) {
         if !self.sample_buffer_filled && self.sample_bytes_remaining > 0 {
             // Sample buffer is empty, so read a new byte from memory
             self.sample_buffer = cart.cpu_read(self.current_address);
@@ -78,8 +79,8 @@ impl DMC {
         }
     }
 
-    pub fn tick(&mut self, cart: &mut dyn Cartridge) {
-        let bus = self.tick_memory_reader(cart);
+    pub fn tick(&mut self, cart: &mut dyn CartridgeWithSaveLoad) {
+        self.tick_memory_reader(cart);
 
         if self.interrupt_flag {
             // trigger IRQ
@@ -111,8 +112,6 @@ impl DMC {
                 self.bits_remaining -= 1;
             }
         }
-
-        bus
     }
 
     pub fn write_reg(&mut self, address: u8, value: u8) {
@@ -141,13 +140,13 @@ impl DMC {
         }
     }
 
-    pub fn save(&self, mut writer: &mut dyn std::io::Write) -> std::io::Result<()> {
+    pub fn save(&self, writer: &mut dyn EasyWriter) -> anyhow::Result<()> {
         writer.write_bool(self.enabled)?;
         writer.write_bool(self.irq_enabled)?;
         writer.write_bool(self.loop_flag)?;
         writer.write_u8(self.output_level)?;
 
-        self.timer.save(&mut writer)?;
+        self.timer.save(writer)?;
 
         writer.write_bool(self.sample_buffer_filled)?;
         writer.write_u8(self.sample_buffer)?;
@@ -164,13 +163,13 @@ impl DMC {
         Ok(())
     }
 
-    pub fn load(&mut self, mut reader: &mut dyn std::io::Read) -> std::io::Result<()> {
+    pub fn load(&mut self, reader: &mut dyn EasyReader) -> anyhow::Result<()> {
         self.enabled = reader.read_bool()?;
         self.irq_enabled = reader.read_bool()?;
         self.loop_flag = reader.read_bool()?;
         self.output_level = reader.read_u8()?;
 
-        self.timer.load(&mut reader)?;
+        self.timer.load(reader)?;
 
         self.sample_buffer_filled = reader.read_bool()?;
         self.sample_buffer = reader.read_u8()?;

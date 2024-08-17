@@ -1,8 +1,6 @@
 use super::{dmc::DMC, noise::Noise, pulse::Pulse, triangle::Triangle};
 use crate::{
-    bus,
-    cartridge::Cartridge,
-    nes001::NesBus,
+    cartridge::CartridgeWithSaveLoad,
     reader_writer::{EasyReader, EasyWriter},
 };
 
@@ -87,7 +85,7 @@ impl APU {
         self.noise.envelope.clock(self.noise.length_counter.halt);
     }
 
-    pub fn write_reg(&mut self, address: u16, value: u8, cart: &mut dyn Cartridge) {
+    pub fn write_reg(&mut self, address: u16, value: u8, cart: &mut dyn CartridgeWithSaveLoad) {
         if (0x4000..=0x4003).contains(&address) {
             self.pulse1.write_reg((address & 0b11) as u8, value);
         } else if (0x4004..=0x4007).contains(&address) {
@@ -161,7 +159,7 @@ impl APU {
         }
     }
 
-    pub fn tick_triangle(&mut self, cart: &mut dyn Cartridge) {
+    pub fn tick_triangle(&mut self, cart: &mut dyn CartridgeWithSaveLoad) {
         if self.triangle.enabled {
             self.triangle.tick();
         }
@@ -244,12 +242,12 @@ impl APU {
         self.cycle_counter += 1;
     }
 
-    pub fn save(&self, mut writer: &mut dyn std::io::Write) -> std::io::Result<()> {
-        self.pulse1.save(&mut writer)?;
-        self.pulse2.save(&mut writer)?;
-        self.triangle.save(&mut writer)?;
-        self.noise.save(&mut writer)?;
-        self.dmc.save(&mut writer)?;
+    pub fn save(&self, writer: &mut dyn EasyWriter) -> anyhow::Result<()> {
+        self.pulse1.save(writer)?;
+        self.pulse2.save(writer)?;
+        self.triangle.save(writer)?;
+        self.noise.save(writer)?;
+        self.dmc.save(writer)?;
 
         writer.write_u32(self.cycle_counter)?;
         writer.write_bool(self.five_step_mode)?;
@@ -261,12 +259,12 @@ impl APU {
         Ok(())
     }
 
-    pub fn load(&mut self, mut reader: &mut dyn std::io::Read) -> std::io::Result<()> {
-        self.pulse1.load(&mut reader)?;
-        self.pulse2.load(&mut reader)?;
-        self.triangle.load(&mut reader)?;
-        self.noise.load(&mut reader)?;
-        self.dmc.load(&mut reader)?;
+    pub fn load(&mut self, reader: &mut dyn EasyReader) -> anyhow::Result<()> {
+        self.pulse1.load(reader)?;
+        self.pulse2.load(reader)?;
+        self.triangle.load(reader)?;
+        self.noise.load(reader)?;
+        self.dmc.load(reader)?;
 
         self.cycle_counter = reader.read_u32()?;
         self.five_step_mode = reader.read_bool()?;

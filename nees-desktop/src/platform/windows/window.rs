@@ -36,17 +36,7 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: 
             let new_width = lparam.0 & 0xFFFF;
             let new_height = lparam.0 >> 16;
 
-            let new_size = if new_width > new_height {
-                new_height
-            } else {
-                new_width
-            };
-
-            (*this).publish_event(WindowEvents::Resize(
-                new_width as i32,
-                new_height as i32,
-                new_size as i32,
-            ));
+            (*this).publish_event(WindowEvents::Resize(new_width as i32, new_height as i32));
         }
         _ => {
             return DefWindowProcA(hwnd, msg, wparam, lparam);
@@ -59,7 +49,7 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: 
 pub enum WindowEvents {
     Close,
     Key(u8, bool),
-    Resize(i32, i32, i32),
+    Resize(i32, i32),
     Command { which: u16 },
 }
 pub struct Window {
@@ -84,14 +74,14 @@ pub enum Menu<'a> {
 }
 
 impl Window {
-    pub fn new() -> Box<Self> {
+    pub fn new(title: &str, width: i32, height: i32) -> Box<Self> {
         let h_instance = unsafe { GetModuleHandleA(None).unwrap() };
 
         let wc = WNDCLASSA {
             lpfnWndProc: Some(wndproc),
             hInstance: h_instance.into(),
             hbrBackground: unsafe { GetSysColorBrush(COLOR_BACKGROUND) },
-            lpszClassName: s!("WinNES"),
+            lpszClassName: s!("Nees"),
             style: CS_OWNDC,
             ..Default::default()
         };
@@ -103,8 +93,8 @@ impl Window {
         let mut rect = RECT {
             left: 0,
             top: 0,
-            right: 512,
-            bottom: 512,
+            right: width,
+            bottom: height,
         };
         unsafe {
             AdjustWindowRect(&mut rect, WS_OVERLAPPEDWINDOW, true).unwrap();
@@ -112,11 +102,12 @@ impl Window {
         let width = rect.right - rect.left;
         let height = rect.bottom - rect.top;
 
+        let title_cstr = CString::new(title).unwrap();
         let hwnd = unsafe {
             CreateWindowExA(
                 WINDOW_EX_STYLE(0),
                 wc.lpszClassName,
-                s!("WinNES"),
+                PCSTR::from_raw(title_cstr.as_ptr() as *const u8),
                 WS_OVERLAPPEDWINDOW | WS_VISIBLE,
                 GetSystemMetrics(SM_CXSCREEN) / 2 - width / 2,
                 GetSystemMetrics(SM_CYSCREEN) / 2 - height / 2,

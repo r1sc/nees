@@ -27,14 +27,14 @@ impl Timer {
         self.current = self.reload;
     }
 
-    pub fn save(&self, mut writer: &mut dyn std::io::Write) -> std::io::Result<()> {
+    pub fn save(&self, writer: &mut dyn EasyWriter) -> anyhow::Result<()> {
         writer.write_u16(self.current)?;
         writer.write_u16(self.reload)?;
 
         Ok(())
     }
 
-    pub fn load(&mut self, mut reader: &mut dyn std::io::Read) -> std::io::Result<()> {
+    pub fn load(&mut self, reader: &mut dyn EasyReader) -> anyhow::Result<()> {
         self.current = reader.read_u16()?;
         self.reload = reader.read_u16()?;
 

@@ -1,7 +1,8 @@
 use crate::{
     bit_helpers::{SubType, BIT_13},
-    cartridge::Cartridge,
-    ines::INES, reader_writer::{EasyReader, EasyWriter},
+    cartridge::{Cartridge, CartridgeSaveLoad, CartridgeWithSaveLoad},
+    ines::INES,
+    reader_writer::{EasyReader, EasyWriter},
 };
 
 #[allow(clippy::upper_case_acronyms)]
@@ -58,14 +59,18 @@ impl Cartridge for UNROM {
     fn scanline(&mut self) -> bool {
         false
     }
-    
-    fn save(&self, mut writer: &mut dyn std::io::Write) -> std::io::Result<()> {
+}
+
+impl CartridgeSaveLoad for UNROM {
+    fn save(&self, writer: &mut dyn EasyWriter) -> anyhow::Result<()> {
         writer.write_u8(self.selected_bank)?;
         Ok(())
     }
-    
-    fn load(&mut self, mut reader: &mut dyn std::io::Read) -> std::io::Result<()> {
+
+    fn load(&mut self, reader: &mut dyn EasyReader) -> anyhow::Result<()> {
         self.selected_bank = reader.read_u8()?;
         Ok(())
     }
 }
+
+impl CartridgeWithSaveLoad for UNROM {}

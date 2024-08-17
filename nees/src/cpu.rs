@@ -60,7 +60,7 @@ const TICKTABLE: [u32; 256] = [
 ];
 
 impl<T: Bus> MOS6502<T> {
-    pub fn save(&self, mut writer: &mut dyn std::io::Write) -> std::io::Result<()> {
+    pub fn save(&self, writer: &mut dyn EasyWriter) -> anyhow::Result<()> {
         writer.write_u16(self.pc)?;
         writer.write_u8(self.a)?;
         writer.write_u8(self.x)?;
@@ -73,7 +73,7 @@ impl<T: Bus> MOS6502<T> {
         Ok(())
     }
 
-    pub fn load(&mut self, mut reader: &mut dyn std::io::Read) -> std::io::Result<()> {
+    pub fn load(&mut self, reader: &mut dyn EasyReader) -> anyhow::Result<()> {
         self.pc = reader.read_u16()?;
         self.a = reader.read_u8()?;
         self.x = reader.read_u8()?;

@@ -1,7 +1,8 @@
 use crate::{
     bit_helpers::{SubType, BIT_13, MASK_16K, MASK_32K},
-    cartridge::Cartridge,
+    cartridge::{Cartridge, CartridgeSaveLoad, CartridgeWithSaveLoad},
     ines::INES,
+    reader_writer::{EasyReader, EasyWriter},
 };
 
 #[allow(clippy::upper_case_acronyms)]
@@ -50,12 +51,16 @@ impl Cartridge for NROM {
     fn scanline(&mut self) -> bool {
         false
     }
-    
-    fn save(&self, _writer: &mut dyn std::io::Write) -> std::io::Result<()> {
+}
+
+impl CartridgeSaveLoad for NROM {
+    fn save(&self, _writer: &mut dyn EasyWriter) -> anyhow::Result<()> {
         Ok(())
     }
-    
-    fn load(&mut self, _reader: &mut dyn std::io::Read) -> std::io::Result<()> {
+
+    fn load(&mut self, _reader: &mut dyn EasyReader) -> anyhow::Result<()> {
         Ok(())
     }
 }
+
+impl CartridgeWithSaveLoad for NROM {}

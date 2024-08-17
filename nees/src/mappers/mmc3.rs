@@ -1,5 +1,5 @@
 use crate::{
-    cartridge::Cartridge,
+    cartridge::{Cartridge, CartridgeSaveLoad, CartridgeWithSaveLoad},
     ines::INES,
     reader_writer::{EasyReader, EasyWriter},
 };
@@ -182,8 +182,10 @@ impl Cartridge for MMC3 {
             false
         }
     }
+}
 
-    fn save(&self, mut writer: &mut dyn std::io::Write) -> std::io::Result<()> {
+impl CartridgeSaveLoad for MMC3 {
+    fn save(&self, writer: &mut dyn EasyWriter) -> anyhow::Result<()> {
         writer.write_all(&self.ram)?;
         writer.write_u8(self.mirroring)?;
         writer.write_u8(self.bank_to_update)?;
@@ -201,13 +203,13 @@ impl Cartridge for MMC3 {
         Ok(())
     }
 
-    fn load(&mut self, mut reader: &mut dyn std::io::Read) -> std::io::Result<()> {
+    fn load(&mut self, reader: &mut dyn EasyReader) -> anyhow::Result<()> {
         reader.read_exact(&mut self.ram)?;
         self.mirroring = reader.read_u8()?;
         self.bank_to_update = reader.read_u8()?;
         self.prg_rom_bank_mode = reader.read_bool()?;
         self.chr_a12_inversion = reader.read_bool()?;
-        
+
         reader.read_exact(&mut self.chr_banks)?;
         reader.read_exact(&mut self.prg_banks)?;
         reader.read_exact(&mut self.registers)?;
@@ -219,3 +221,5 @@ impl Cartridge for MMC3 {
         Ok(())
     }
 }
+
+impl CartridgeWithSaveLoad for MMC3 {}

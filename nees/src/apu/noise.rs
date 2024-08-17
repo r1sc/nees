@@ -72,26 +72,26 @@ impl Noise {
         }
     }
 
-    pub fn save(&self, mut writer: &mut dyn std::io::Write) -> std::io::Result<()> {
+    pub fn save(&self, writer: &mut dyn EasyWriter) -> anyhow::Result<()> {
         writer.write_bool(self.enabled)?;
-        self.timer.save(&mut writer)?;
-        self.length_counter.save(&mut writer)?;
+        self.timer.save(writer)?;
+        self.length_counter.save(writer)?;
         writer.write_u8(self.current_output)?;
         writer.write_u16(self.shift_register)?;
         writer.write_bool(self.mode)?;
-        self.envelope.save(&mut writer)?;
+        self.envelope.save(writer)?;
 
         Ok(())
     }
 
-    pub fn load(&mut self, mut reader: &mut dyn std::io::Read) -> std::io::Result<()> {
+    pub fn load(&mut self, reader: &mut dyn EasyReader) -> anyhow::Result<()> {
         self.enabled = reader.read_bool()?;
-        self.timer.load(&mut reader)?;
-        self.length_counter.load(&mut reader)?;
+        self.timer.load(reader)?;
+        self.length_counter.load(reader)?;
         self.current_output = reader.read_u8()?;
         self.shift_register = reader.read_u16()?;
         self.mode = reader.read_bool()?;
-        self.envelope.load(&mut reader)?;
+        self.envelope.load(reader)?;
 
         Ok(())
     }

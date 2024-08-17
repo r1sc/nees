@@ -1,6 +1,6 @@
 use bitfield_struct::bitfield;
 
-use crate::{cartridge::Cartridge, reader_writer::{EasyReader, EasyWriter}};
+use crate::{cartridge::CartridgeWithSaveLoad, reader_writer::{EasyReader, EasyWriter}};
 
 #[bitfield(u8)]
 struct PPUCTRL {
@@ -74,7 +74,7 @@ struct OAMEntry {
 }
 
 impl OAMEntry {
-    pub fn save(&self, mut writer: &mut dyn std::io::Write) -> std::io::Result<()> {
+    pub fn save(&self, writer: &mut dyn EasyWriter) -> anyhow::Result<()> {
         writer.write_u8(self.y)?;
         writer.write_u8(self.tile_index)?;
         writer.write_u8(self.attributes)?;
@@ -82,7 +82,7 @@ impl OAMEntry {
         Ok(())
     }
 
-    pub fn load(&mut self, mut reader: &mut dyn std::io::Read) -> std::io::Result<()> {
+    pub fn load(&mut self, reader: &mut dyn EasyReader) -> anyhow::Result<()> {
         self.y = reader.read_u8()?;
         self.tile_index = reader.read_u8()?;
         self.attributes = reader.read_u8()?;
@@ -180,7 +180,7 @@ impl PPU {
         }
     }
 
-    pub fn save(&self, mut writer: &mut dyn std::io::Write) -> std::io::Result<()> {
+    pub fn save(&self, writer: &mut dyn EasyWriter) -> anyhow::Result<()> {
         for entry in &self.oam_entries {
             entry.save(writer)?;
         }
@@ -214,7 +214,7 @@ impl PPU {
         Ok(())
     }
 
-    pub fn load(&mut self, mut reader: &mut dyn std::io::Read) -> std::io::Result<()> {
+    pub fn load(&mut self, reader: &mut dyn EasyReader) -> anyhow::Result<()> {
         for entry in &mut self.oam_entries {
             entry.load(reader)?;
         }
@@ -252,7 +252,7 @@ impl PPU {
         self.mask.show_background() || self.mask.show_sprites()
     }
 
-    pub fn cpu_ppu_bus_read(&mut self, address: u8, cart: &mut dyn Cartridge) -> u8 {
+    pub fn cpu_ppu_bus_read(&mut self, address: u8, cart: &mut dyn CartridgeWithSaveLoad) -> u8 {
         let mut value: u8 = 0;
 
         match address {
@@ -293,7 +293,7 @@ impl PPU {
         value
     }
 
-    fn internal_bus_write(&mut self, address: u16, value: u8, cart: &mut dyn Cartridge) {
+    fn internal_bus_write(&mut self, address: u16, value: u8, cart: &mut dyn CartridgeWithSaveLoad) {
         if address >= 0x3F00 && address <= 0x3FFF {
             // Palette control
             let index = address & 0xF;
@@ -307,7 +307,7 @@ impl PPU {
         }
     }
 
-    fn internal_bus_read(&mut self, address: u16, cart: &mut dyn Cartridge) -> u8 {
+    fn internal_bus_read(&mut self, address: u16, cart: &mut dyn CartridgeWithSaveLoad) -> u8 {
         if address >= 0x3F00 && address <= 0x3FFF {
             // Palette control
             let index = address & 0x3;
@@ -321,7 +321,7 @@ impl PPU {
         }
     }
 
-    pub fn cpu_ppu_bus_write(&mut self, address: u8, value: u8, cart: &mut dyn Cartridge) {
+    pub fn cpu_ppu_bus_write(&mut self, address: u8, value: u8, cart: &mut dyn CartridgeWithSaveLoad) {
         match address {
             0 => {
                 self.ctrl.0 = value;
@@ -381,12 +381,12 @@ impl PPU {
     }
 
     #[inline]
-    fn nametable_fetch(&mut self, cart: &mut dyn Cartridge) {
+    fn nametable_fetch(&mut self, cart: &mut dyn CartridgeWithSaveLoad) {
         self.next_tile = self.internal_bus_read(0x2000 | (self.v.0 & 0x0FFF), cart);
     }
 
     #[inline]
-    fn attribute_fetch(&mut self, cart: &mut dyn Cartridge) {
+    fn attribute_fetch(&mut self, cart: &mut dyn CartridgeWithSaveLoad) {
         self.next_attribute = self.internal_bus_read(
             0x23C0 | (self.v.0 & 0x0C00) | ((self.v.0 >> 4) & 0x38) | ((self.v.0 >> 2) & 0x07),
             cart,
@@ -401,7 +401,7 @@ impl PPU {
     }
 
     #[inline]
-    fn bg_lsb_fetch(&mut self, cart: &mut dyn Cartridge) {
+    fn bg_lsb_fetch(&mut self, cart: &mut dyn CartridgeWithSaveLoad) {
         self.nametable_address
             .set_fine_y_offset(self.v.fine_y_scroll());
         self.nametable_address.set_hi_bit_plane(false);
@@ -412,7 +412,7 @@ impl PPU {
     }
 
     #[inline]
-    fn bg_msb_fetch(&mut self, cart: &mut dyn Cartridge) {
+    fn bg_msb_fetch(&mut self, cart: &mut dyn CartridgeWithSaveLoad) {
         self.nametable_address.set_hi_bit_plane(true);
         self.next_pattern_msb = self.internal_bus_read(self.nametable_address.0, cart);
     }
@@ -480,7 +480,7 @@ impl PPU {
         scanline: i32,
         dot: u16,
         fb: &mut [u32],
-        cart: &mut dyn Cartridge,
+        cart: &mut dyn CartridgeWithSaveLoad,
     ) -> bool {
         if scanline <= 239 {
             if scanline == -1 && dot == 1 {

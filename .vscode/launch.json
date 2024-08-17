@@ -5,6 +5,13 @@
     "version": "0.2.0",
     "configurations": [
         {
+            "name": "Launch Edge",
+            "request": "launch",
+            "type": "msedge",
+            "url": "http://localhost:8000",
+            "webRoot": "${workspaceFolder}/nees-wasm/www"
+        },
+        {
             "type": "lldb",
             "request": "launch",
             "name": "Debug unit tests in library 'nees'",
@@ -54,6 +61,43 @@
                 ],
                 "filter": {
                     "name": "nees-desktop",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug executable 'nees-sdl'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--bin=nees-sdl",
+                    "--package=nees-sdl"
+                ],
+                "filter": {
+                    "name": "nees-sdl",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in executable 'nees-sdl'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--bin=nees-sdl",
+                    "--package=nees-sdl"
+                ],
+                "filter": {
+                    "name": "nees-sdl",
                     "kind": "bin"
                 }
             },
