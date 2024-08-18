@@ -134,16 +134,16 @@ start_btn.onclick = async () => {
             if (gp.buttons[9].pressed) {
                 player_buttons[player_index] |= 1 << 3;
             }
-            if (gp.axes[1] < -0.5) {
+            if (gp.axes[1] < -0.5 || gp.buttons[12].pressed) {
                 player_buttons[player_index] |= 1 << 4;
             }
-            if (gp.axes[1] > 0.5) {
+            if (gp.axes[1] > 0.5 || gp.buttons[13].pressed) {
                 player_buttons[player_index] |= 1 << 5;
             }
-            if (gp.axes[0] < -0.5) {
+            if (gp.axes[0] < -0.5 || gp.buttons[14].pressed) {
                 player_buttons[player_index] |= 1 << 6;
             }
-            if (gp.axes[0] > 0.5) {
+            if (gp.axes[0] > 0.5 || gp.buttons[15].pressed) {
                 player_buttons[player_index] |= 1 << 7;
             }
         }

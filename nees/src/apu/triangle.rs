@@ -51,7 +51,8 @@ impl Triangle {
                 }
             }
             _ => {
-                panic!("Invalid triangle register write");
+                // North & South crashes if we panic here
+                // panic!("Invalid triangle register write");
             }
         }
     }

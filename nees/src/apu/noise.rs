@@ -67,7 +67,8 @@ impl Noise {
                 }
             }
             _ => {
-                panic!("Invalid noise register write");
+                // North & South crashes if we panic here
+                // panic!("Invalid noise register write");
             }
         }
     }

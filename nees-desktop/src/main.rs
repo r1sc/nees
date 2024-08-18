@@ -8,7 +8,7 @@ mod gamepad;
 mod platform;
 
 fn main() {
-    let rom_path = "roms/smb3.nes";
+    let rom_path = "roms/ns.nes";
     let mut nes = nes001::NES001::from_rom(&std::fs::read(rom_path).unwrap());
 
     let mut player1_controller_state: ControllerState = ControllerState::new();
