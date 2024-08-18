@@ -4,7 +4,8 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "start": "copy .\\pkg\\nees_wasm_bg.wasm .\\www & node serve.mjs"
+    "start": "node serve.mjs",
+    "build-release": "esbuild src/index.ts --bundle --loader:.wasm=file --minify --outfile=www/index.js"
   },
   "author": "",
   "license": "ISC",

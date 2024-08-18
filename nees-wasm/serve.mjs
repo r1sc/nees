@@ -5,7 +5,10 @@ const ctx = await esbuild.context({
     bundle: true,
     outdir: "www",
     sourcemap: true,
-    logLevel: "info"
+    logLevel: "info",
+    loader: {
+        ".wasm": "file"
+    }
 });
 
 await ctx.serve({

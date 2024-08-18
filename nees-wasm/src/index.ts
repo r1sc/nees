@@ -1,6 +1,6 @@
 import { make_renderer } from "./renderer";
-import { get_framebuffer_ptr, get_framebuffer_view, init, tick } from "../pkg/nees_wasm";
-import wasminit from "../pkg/nees_wasm";
+import wasminit, { get_framebuffer_ptr, init, tick } from "../pkg/nees_wasm";
+import wasm_path from "../pkg/nees_wasm_bg.wasm";
 
 declare global {
     interface Window {
@@ -24,9 +24,7 @@ window.onclick = async function () {
     };
 
 
-    const o = await wasminit("nees_wasm_bg.wasm");
-    
-
+    const o = await wasminit(wasm_path);
 
     const { gl, draw } = make_renderer();
 
