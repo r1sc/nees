@@ -1,5 +1,5 @@
 import { make_renderer } from "./renderer";
-import { init, tick } from "../pkg/nees_wasm";
+import { get_framebuffer_ptr, get_framebuffer_view, init, tick } from "../pkg/nees_wasm";
 import wasminit from "../pkg/nees_wasm";
 
 declare global {
@@ -24,7 +24,8 @@ window.onclick = async function () {
     };
 
 
-    await wasminit("nees_wasm_bg.wasm");
+    const o = await wasminit("nees_wasm_bg.wasm");
+    
 
 
     const { gl, draw } = make_renderer();
@@ -38,8 +39,11 @@ window.onclick = async function () {
     const rom = await get_rom_from_url("roms/smb3.nes");
 
     const nees_ptr = init(rom);
-    const framebuffer = new Uint32Array(256 * 240);
-    const fb_u8 = new Uint8Array(framebuffer.buffer);
+
+    const fb_ptr = get_framebuffer_ptr();
+    const fb_u8 = new Uint8Array(o.memory.buffer, fb_ptr, 256 * 240 * 4);
+    // const framebuffer = new Uint32Array(256 * 240);
+    // const fb_u8 = new Uint8Array(framebuffer.buffer);
 
     let last_time = performance.now();
     let accum = 0;
@@ -102,7 +106,7 @@ window.onclick = async function () {
         accum += delta;
 
         while (accum >= target_ms) {
-            tick(nees_ptr, framebuffer, player1_buttons_down, player2_buttons_down);
+            tick(nees_ptr, fb_ptr, player1_buttons_down, player2_buttons_down);
             accum -= target_ms;
             need_render = true;
         }
