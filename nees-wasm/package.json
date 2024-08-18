@@ -4,8 +4,8 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "start": "node serve.mjs",
-    "build-release": "esbuild src/index.ts --bundle --loader:.wasm=file --minify --outfile=www/index.js"
+    "start": "esbuild src/index.ts src/nes-audio-processor.ts --bundle --loader:.wasm=file --sourcemap --outdir=www --servedir=www --watch",
+    "build-release": "esbuild src/index.ts src/nes-audio-processor.ts --bundle --loader:.wasm=file --minify --outdir=www"
   },
   "author": "",
   "license": "ISC",
