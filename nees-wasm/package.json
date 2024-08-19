@@ -4,8 +4,8 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "start": "esbuild src/index.ts src/nes-audio-processor.ts --bundle --loader:.wasm=file --sourcemap --outdir=www --servedir=www --watch",
-    "build-release": "esbuild src/index.ts src/nes-audio-processor.ts --bundle --loader:.wasm=file --minify --outdir=www"
+    "start": "esbuild src/index.ts src/nes-audio-processor.ts --bundle --loader:.wasm=file --loader:.glsl=text --sourcemap --outdir=www --servedir=www --watch",
+    "build-release": "esbuild src/index.ts src/nes-audio-processor.ts --bundle --loader:.wasm=file --loader:.glsl=text --minify --outdir=www"
   },
   "author": "",
   "license": "ISC",
