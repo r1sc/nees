@@ -240,6 +240,7 @@ dependencies = [
  "glow",
  "nees",
  "nees-glrenderer",
+ "nees-osd",
  "nees-std",
  "windows",
 ]
@@ -250,6 +251,10 @@ version = "0.1.0"
 dependencies = [
  "glow",
 ]
+
+[[package]]
+name = "nees-osd"
+version = "0.1.0"
 
 [[package]]
 name = "nees-sdl"
@@ -276,6 +281,7 @@ name = "nees-wasm"
 version = "0.1.0"
 dependencies = [
  "nees",
+ "nees-osd",
  "wasm-bindgen",
  "wasm-bindgen-test",
 ]

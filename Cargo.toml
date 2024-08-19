@@ -8,4 +8,4 @@ members = [
     "nees-glrenderer", 
     "nees-std", 
     "nees-wasm"
-]
+, "nees-osd"]

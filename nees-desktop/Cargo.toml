@@ -11,6 +11,7 @@ glow = "0.14.0"
 nees = { path = "../nees" }
 nees-glrenderer = { path = "../nees-glrenderer" }
 nees-std = { path = "../nees-std" }
+nees-osd = { path = "../nees-osd" }
 
 [dependencies.windows]
     version = "0.58.0"

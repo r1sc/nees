@@ -16,7 +16,7 @@ impl Gamepad {
         }
     }
 
-    pub fn update_controller_state(&mut self, controller_states: &mut [&mut ControllerState; 2]) {
+    pub fn update_controller_state(&mut self, controller_states: &mut [ControllerState; 2]) {
         while let Some(Event { id, event, time }) = self.gilrs.next_event() {
             if event == EventType::Connected {
                 println!("Gamepad {} connected at {:?}", id, time);

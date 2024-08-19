@@ -1,5 +1,5 @@
 import { make_renderer } from "./renderer";
-import wasminit, { get_framebuffer_ptr, init, tick } from "../pkg/nees_wasm";
+import wasminit, { draw_osd, get_framebuffer_ptr, init, step_osd, StepResponse, tick } from "../pkg/nees_wasm";
 import wasm_path from "../pkg/nees_wasm_bg.wasm";
 
 // Get rom path from query string
@@ -19,7 +19,7 @@ const start_btn = document.createElement("button");
 start_btn.textContent = "Click to start";
 document.body.appendChild(start_btn);
 
-start_btn.onclick = async () => {
+start_btn.onclick = async function () {
     start_btn.remove();
 
     const audio = new AudioContext({ sampleRate: 15720 });
@@ -34,9 +34,9 @@ start_btn.onclick = async () => {
         audioNode.port.postMessage({ sample: sample });
     };
 
-    async function loadwasm(){
+    async function loadwasm() {
         const response = fetch(wasm_path as unknown as string);
-        return await wasminit(response);        
+        return await wasminit(response);
     }
 
     const o = await loadwasm();
@@ -51,7 +51,7 @@ start_btn.onclick = async () => {
 
     const rom = await get_rom_from_url(rom_path);
 
-    const nees_ptr = init(rom);
+    const nees_state_ptr = init(rom);
 
     const fb_ptr = get_framebuffer_ptr();
     const fb_u8 = new Uint8Array(o.memory.buffer, fb_ptr, 256 * 240 * 4);
@@ -64,48 +64,85 @@ start_btn.onclick = async () => {
     const target_ms = 1000 / 60;
 
     let player_buttons: [number, number] = [0, 0];
+    let b_button = ["k", "a"];
+    let a_button = ["l", "s"];
+    let select_button = ["i", "q"];
+    let start_button = ["o", "w"];
+    let up_button = ["ArrowUp", "t"];
+    let down_button = ["ArrowDown", "g"];
+    let left_button = ["ArrowLeft", "f"];
+    let right_button = ["ArrowRight", "h"];
+
+    let osd_enabled = false;
 
     window.addEventListener("keydown", (e) => {
-        if (e.key === "s") {
-            player_buttons[0] |= 1 << 0;
-        } else if (e.key === "a") {
-            player_buttons[0] |= 1 << 1;
-        } else if (e.key === "q") {
-            player_buttons[0] |= 1 << 2;
-        } else if (e.key === "w") {
-            player_buttons[0] |= 1 << 3;
-        } else if (e.key === "ArrowUp") {
-            player_buttons[0] |= 1 << 4;
-        } else if (e.key === "ArrowDown") {
-            player_buttons[0] |= 1 << 5;
-        } else if (e.key === "ArrowLeft") {
-            player_buttons[0] |= 1 << 6;
-        } else if (e.key === "ArrowRight") {
-            player_buttons[0] |= 1 << 7;
+        for (let i = 0; i < 2; i++) {
+            if (e.key === a_button[i]) {
+                player_buttons[i] |= 1 << 0;
+            } else if (e.key === b_button[i]) {
+                player_buttons[i] |= 1 << 1;
+            } else if (e.key === select_button[i]) {
+                player_buttons[i] |= 1 << 2;
+            } else if (e.key === start_button[i]) {
+                player_buttons[i] |= 1 << 3;
+            } else if (e.key === up_button[i]) {
+                player_buttons[i] |= 1 << 4;
+            } else if (e.key === down_button[i]) {
+                player_buttons[i] |= 1 << 5;
+            } else if (e.key === left_button[i]) {
+                player_buttons[i] |= 1 << 6;
+            } else if (e.key === right_button[i]) {
+                player_buttons[i] |= 1 << 7;
+            }
         }
 
+        if (e.key == "Escape") {
+            e.preventDefault();
+            osd_enabled = !osd_enabled;
+ 
+            if (osd_enabled) {
+                draw_osd(nees_state_ptr, fb_ptr);
+            }
+        } else if (osd_enabled) {
+            let response: StepResponse | null = null;
+            if (e.key == "ArrowUp") response = step_osd(nees_state_ptr, 0);
+            else if (e.key == "ArrowDown") response = step_osd(nees_state_ptr, 1);
+            else response = step_osd(nees_state_ptr, 2);
+
+            if (response.action === 1) b_button[response.which_player] = e.key;
+            else if (response.action === 2) a_button[response.which_player] = e.key;
+            else if (response.action === 3) select_button[response.which_player] = e.key;
+            else if (response.action === 4) start_button[response.which_player] = e.key;
+            else if (response.action === 5) up_button[response.which_player] = e.key;
+            else if (response.action === 6) down_button[response.which_player] = e.key;
+            else if (response.action === 7) left_button[response.which_player] = e.key;
+            else if (response.action === 8) right_button[response.which_player] = e.key;
+
+            draw_osd(nees_state_ptr, fb_ptr);
+        }
     });
 
     window.addEventListener("keyup", (e) => {
-        if (e.key === "s") {
-            player_buttons[0] &= ~(1 << 0);
-        } else if (e.key === "a") {
-            player_buttons[0] &= ~(1 << 1);
-        } else if (e.key === "q") {
-            player_buttons[0] &= ~(1 << 2);
-        } else if (e.key === "w") {
-            player_buttons[0] &= ~(1 << 3);
-        } else if (e.key === "ArrowUp") {
-            player_buttons[0] &= ~(1 << 4);
-        } else if (e.key === "ArrowDown") {
-            player_buttons[0] &= ~(1 << 5);
-        } else if (e.key === "ArrowLeft") {
-            player_buttons[0] &= ~(1 << 6);
-        } else if (e.key === "ArrowRight") {
-            player_buttons[0] &= ~(1 << 7);
+        for (let i = 0; i < 2; i++) {
+            if (e.key === a_button[i]) {
+                player_buttons[i] &= ~(1 << 0);
+            } else if (e.key === b_button[i]) {
+                player_buttons[i] &= ~(1 << 1);
+            } else if (e.key === select_button[i]) {
+                player_buttons[i] &= ~(1 << 2);
+            } else if (e.key === start_button[i]) {
+                player_buttons[i] &= ~(1 << 3);
+            } else if (e.key === up_button[i]) {
+                player_buttons[i] &= ~(1 << 4);
+            } else if (e.key === down_button[i]) {
+                player_buttons[i] &= ~(1 << 5);
+            } else if (e.key === left_button[i]) {
+                player_buttons[i] &= ~(1 << 6);
+            } else if (e.key === right_button[i]) {
+                player_buttons[i] &= ~(1 << 7);
+            }
         }
     });
-
 
     (function render() {
 
@@ -116,8 +153,6 @@ start_btn.onclick = async () => {
         if (delta > 500) {
             delta = 500;
         }
-
-        accum += delta;
 
         const [gp1, gp2] = navigator.getGamepads();
         function set_buttons_down(gp: Gamepad, player_index: number) {
@@ -150,9 +185,15 @@ start_btn.onclick = async () => {
         if (gp1) set_buttons_down(gp1, 0);
         if (gp2) set_buttons_down(gp2, 1);
 
-        while (accum >= target_ms) {
-            tick(nees_ptr, fb_ptr, player_buttons[0], player_buttons[1]);
-            accum -= target_ms;
+        if (!osd_enabled) {
+            accum += delta;
+
+            while (accum >= target_ms) {
+                tick(nees_state_ptr, fb_ptr, player_buttons[0], player_buttons[1]);
+                accum -= target_ms;
+                need_render = true;
+            }
+        } else {
             need_render = true;
         }
 
@@ -161,8 +202,6 @@ start_btn.onclick = async () => {
             need_render = false;
         }
 
-
         requestAnimationFrame(render);
     })();
-
 };
