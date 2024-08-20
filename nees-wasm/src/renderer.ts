@@ -61,9 +61,6 @@ export function make_renderer() {
     };
     resize();
 
-    const glsl = (x: any) => x;
-
-
     const program = create_shader(gl, shader_src);
     gl.useProgram(program);
 
@@ -119,6 +116,9 @@ export function make_renderer() {
             gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, 256, 240, gl.RGBA, gl.UNSIGNED_BYTE, pixeldata);
             gl.drawElements(gl.TRIANGLES, 6, gl.UNSIGNED_BYTE, 0);
         },
-        gl
+        gl,
+        set_horizontal_adjustment: (x: number) => {
+            gl.uniform1f(gl.getUniformLocation(program, "u_horizontal_offset"), x);
+        }
     }
 };

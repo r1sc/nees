@@ -12,6 +12,7 @@ pub enum StepResponse {
     SetButtonRight { which_player: u8 },
     SaveState,
     LoadState,
+    HorizontalAdjustment(i16),
 }
 
 #[repr(u8)]
@@ -34,6 +35,7 @@ enum OSDState {
     Main { current_selection: u8 },
     RemapPlayer { which_player: u8, current_key: u8 },
     VideoSettings { current_selection: u8 },
+    VideoSettingsHorizontalAdjustment { value: i16 },
 }
 
 #[allow(clippy::upper_case_acronyms)]
@@ -50,7 +52,8 @@ impl OSD {
         }
     }
 
-    fn draw_char(&self, framebuffer: &mut [u32], col: u8, row: u8, c: char, fg: u8, bg: u8) {
+    fn draw_char(&self, framebuffer: &mut [u32], col: u8, mut row: u8, c: char, fg: u8, bg: u8) {
+        row += START_ROW;
         let font = include_bytes!("../menu_font.bin");
         for yy in 0..8 {
             let mut bitpattern = font[(c as u16 * 8 + yy as u16) as usize];
@@ -78,10 +81,7 @@ impl OSD {
 
     fn clear_screen(&self, framebuffer: &mut [u32], bg: u8) {
         let palette_index = bg as usize;
-        // for i in (START_ROW as usize) * 8 * 256..(END_ROW as usize) * 8 * 256 {
-        //     framebuffer[i] = PALETTE_COLORS[palette_index];
-        // }
-        for y in (START_ROW as usize)*8..(END_ROW as usize)*8 {
+        for y in (START_ROW as usize) * 8..(END_ROW as usize) * 8 {
             for x in 8..248 {
                 framebuffer[(y * 256) + x] = PALETTE_COLORS[palette_index];
             }
@@ -98,51 +98,65 @@ impl OSD {
 
     pub fn draw_step(&mut self, framebuffer: &mut [u32]) {
         self.clear_screen(framebuffer, BACKGROUND);
-        self.draw_string_centered(framebuffer, START_ROW+1, "NEES Options", WHITE, BACKGROUND);
+        self.draw_string_centered(framebuffer, 1, "NEES Options", WHITE, BACKGROUND);
 
         match self.current_menu {
             OSDState::Main { current_selection } => {
                 self.draw_string_centered(
                     framebuffer,
-                    START_ROW+3,
+                    3,
                     "Use arrow keys to navigate",
                     GRAY,
                     BACKGROUND,
                 );
                 self.draw_string_centered(
                     framebuffer,
-                    START_ROW+4,
+                    4,
                     "Any other button to select",
                     GRAY,
                     BACKGROUND,
                 );
-                self.draw_menu_item(framebuffer, START_ROW+6, "  Remap player 1", current_selection == 0);
-                self.draw_menu_item(framebuffer, START_ROW+7, "  Remap player 2", current_selection == 1);
-                self.draw_menu_item(framebuffer, START_ROW+9, "  Video settings", current_selection == 2);
-                self.draw_menu_item(framebuffer, START_ROW+11, "  Save state", current_selection == 3);
-                self.draw_menu_item(framebuffer, START_ROW+12, "  Load state", current_selection == 4);
+                self.draw_menu_item(framebuffer, 6, "  Remap player 1", current_selection == 0);
+                self.draw_menu_item(framebuffer, 7, "  Remap player 2", current_selection == 1);
+                self.draw_menu_item(framebuffer, 9, "  Video settings", current_selection == 2);
+                self.draw_menu_item(framebuffer, 11, "  Save state", current_selection == 3);
+                self.draw_menu_item(framebuffer, 12, "  Load state", current_selection == 4);
             }
             OSDState::RemapPlayer {
                 which_player: _,
                 current_key,
             } => match current_key {
-                0 => self.draw_string_centered(framebuffer, START_ROW+6, "Press B", WHITE, BACKGROUND),
-                1 => self.draw_string_centered(framebuffer, START_ROW+6, "Press A", WHITE, BACKGROUND),
-                2 => self.draw_string_centered(framebuffer, START_ROW+6, "Press Select", WHITE, BACKGROUND),
-                3 => self.draw_string_centered(framebuffer, START_ROW+6, "Press Start", WHITE, BACKGROUND),
-                4 => self.draw_string_centered(framebuffer, START_ROW+6, "Press Up", WHITE, BACKGROUND),
-                5 => self.draw_string_centered(framebuffer, START_ROW+6, "Press Down", WHITE, BACKGROUND),
-                6 => self.draw_string_centered(framebuffer, START_ROW+6, "Press Left", WHITE, BACKGROUND),
-                7 => self.draw_string_centered(framebuffer, START_ROW+6, "Press Right", WHITE, BACKGROUND),
+                0 => self.draw_string_centered(framebuffer, 8, "Press B", WHITE, BACKGROUND),
+                1 => self.draw_string_centered(framebuffer, 8, "Press A", WHITE, BACKGROUND),
+                2 => self.draw_string_centered(framebuffer, 8, "Press Select", WHITE, BACKGROUND),
+                3 => self.draw_string_centered(framebuffer, 8, "Press Start", WHITE, BACKGROUND),
+                4 => self.draw_string_centered(framebuffer, 8, "Press Up", WHITE, BACKGROUND),
+                5 => self.draw_string_centered(framebuffer, 8, "Press Down", WHITE, BACKGROUND),
+                6 => self.draw_string_centered(framebuffer, 8, "Press Left", WHITE, BACKGROUND),
+                7 => self.draw_string_centered(framebuffer, 8, "Press Right", WHITE, BACKGROUND),
                 _ => {}
             },
-            OSDState::VideoSettings {
-                current_selection,
-            } => {
-                self.draw_menu_item(framebuffer, START_ROW+6, "  Horizontal adjustment", current_selection == 0);
-                self.draw_menu_item(framebuffer, START_ROW+7, "  Curve ratio", current_selection == 1);
-                self.draw_menu_item(framebuffer, START_ROW+8, "  Scanlines", current_selection == 2);
-                self.draw_menu_item(framebuffer, START_ROW+10, "  Back", current_selection == 3);
+            OSDState::VideoSettings { current_selection } => {
+                self.draw_menu_item(
+                    framebuffer,
+                    6,
+                    "  Horizontal adjustment",
+                    current_selection == 0,
+                );
+                self.draw_menu_item(framebuffer, 7, "  Curve ratio (N/A)", current_selection == 1);
+                self.draw_menu_item(framebuffer, 8, "  Scanlines (N/A)", current_selection == 2);
+                self.draw_menu_item(framebuffer, 10, "  Back", current_selection == 3);
+            }
+            OSDState::VideoSettingsHorizontalAdjustment { value } => {
+                self.draw_string_centered(framebuffer, 3, "Up/Down to adjust", GRAY, BACKGROUND);
+                self.draw_string_centered(framebuffer, 4, "Any key to exit", GRAY, BACKGROUND);
+                self.draw_string_centered(
+                    framebuffer,
+                    8,
+                    &format!("Horizontal adjustment: {}", value),
+                    WHITE,
+                    BACKGROUND,
+                );
             }
         }
     }
@@ -220,9 +234,7 @@ impl OSD {
 
                 return response;
             }
-            OSDState::VideoSettings {
-                current_selection,
-            } => match action {
+            OSDState::VideoSettings { current_selection } => match action {
                 OSDAction::Up => {
                     self.current_menu = OSDState::VideoSettings {
                         current_selection: if current_selection == 0 {
@@ -242,6 +254,10 @@ impl OSD {
                     };
                 }
                 OSDAction::Ok => match current_selection {
+                    0 => {
+                        self.current_menu =
+                            OSDState::VideoSettingsHorizontalAdjustment { value: 0 };
+                    }
                     3 => {
                         self.current_menu = OSDState::Main {
                             current_selection: 2,
@@ -250,6 +266,24 @@ impl OSD {
                     _ => {}
                 },
             },
+            OSDState::VideoSettingsHorizontalAdjustment { mut value } => {
+                match action {
+                    OSDAction::Up => {
+                        value += 1;
+                        self.current_menu = OSDState::VideoSettingsHorizontalAdjustment { value };
+                    }
+                    OSDAction::Down => {
+                        value -= 1;
+                        self.current_menu = OSDState::VideoSettingsHorizontalAdjustment { value };
+                    }
+                    OSDAction::Ok => {
+                        self.current_menu = OSDState::VideoSettings {
+                            current_selection: 0,
+                        };
+                    }
+                }
+                return StepResponse::HorizontalAdjustment(value);
+            }
         }
 
         StepResponse::None

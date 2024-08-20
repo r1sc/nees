@@ -14,6 +14,7 @@ crate-type = ["cdylib", "rlib"]
 wasm-bindgen = "0.2.84"
 nees = { path = "../nees" }
 nees-osd = { path = "../nees-osd" }
+nees-std = { path = "../nees-std" }
 
 # The `console_error_panic_hook` crate provides better debugging of panics by
 # logging them with `console.error`. This is great for development, but requires

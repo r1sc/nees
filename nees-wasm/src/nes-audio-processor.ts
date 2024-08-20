@@ -5,27 +5,20 @@ class NesAudioProcessor extends AudioWorkletProcessor {
   to_play: number[] = [];
   queue: number[] = [];
   buffers: Int16Array[] = [];
-  current_buffer_pos = 0;
 
   constructor() {
     super();
 
     for (let i = 0; i < NUM_BUFFERS; i++) {
-      this.buffers.push(new Int16Array(BUFFER_LEN));
       this.queue.push(i);
     }
 
-    this.port.onmessage = (event: MessageEvent<{ sample: number }>) => {
+    this.port.onmessage = (event: MessageEvent<{ samples: Int16Array }>) => {
       if (this.queue.length === 0) return;
 
       const current_buffer_index = this.queue[0];
-      const current_buffer = this.buffers[current_buffer_index];
-      current_buffer[this.current_buffer_pos++] = event.data.sample;
-
-      if (this.current_buffer_pos >= current_buffer.length) {
-        this.current_buffer_pos = 0;
-        this.queue_buffer();
-      }
+      this.buffers[current_buffer_index] = event.data.samples;
+      this.queue_buffer();
     }
   }
 

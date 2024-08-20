@@ -182,6 +182,7 @@ fn main() {
                         }
                         nees_osd::config_menu::StepResponse::SaveState => todo!(),
                         nees_osd::config_menu::StepResponse::LoadState => todo!(),
+                        nees_osd::config_menu::StepResponse::HorizontalAdjustment(_) => todo!(),
                     }
                 }
             }

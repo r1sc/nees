@@ -16,6 +16,16 @@ pub fn save_state(rom_path: &str, nes: &nes001::NES001) {
     nes.save(&mut buf_writer).unwrap();
 }
 
+pub fn save_state_buffer(nes: &nes001::NES001, writer: &mut dyn Write) {
+    let mut buf_writer = MyBufWriter::new(writer);
+    nes.save(&mut buf_writer).unwrap();
+}
+
+pub fn load_state_buffer(nes: &mut nes001::NES001, reader: &mut dyn Read) {
+    let mut buf_reader = MyBufReader::new(reader);
+    nes.load(&mut buf_reader).unwrap();
+}
+
 struct MyBufReader<R: Read> {
     reader: R,
 }

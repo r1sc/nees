@@ -282,6 +282,7 @@ version = "0.1.0"
 dependencies = [
  "nees",
  "nees-osd",
+ "nees-std",
  "wasm-bindgen",
  "wasm-bindgen-test",
 ]

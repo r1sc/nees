@@ -1,5 +1,5 @@
 import { make_renderer } from "./renderer";
-import wasminit, { draw_osd, get_framebuffer_ptr, init, step_osd, StepResponse, tick } from "../pkg/nees_wasm";
+import wasminit, { draw_osd, get_framebuffer_ptr, init, load_state, save_state, step_osd, StepResponse, tick } from "../pkg/nees_wasm";
 import wasm_path from "../pkg/nees_wasm_bg.wasm";
 
 // Get rom path from query string
@@ -30,8 +30,14 @@ start_btn.onclick = async function () {
     });
     audioNode.connect(audio.destination);
 
+    const current_samples = new Int16Array(128);
+    let current_sample_index = 0;
     window.waveout_callback = (sample: number) => {
-        audioNode.port.postMessage({ sample: sample });
+        current_samples[current_sample_index++] = sample;
+        if (current_sample_index === 128) {
+            audioNode.port.postMessage({ samples: current_samples });
+            current_sample_index = 0;
+        }
     };
 
     async function loadwasm() {
@@ -40,8 +46,6 @@ start_btn.onclick = async function () {
     }
 
     const o = await loadwasm();
-
-    const { gl, draw } = make_renderer();
 
     async function get_rom_from_url(url: string) {
         const response = await fetch(url);
@@ -52,54 +56,79 @@ start_btn.onclick = async function () {
     const rom = await get_rom_from_url(rom_path);
 
     const nees_state_ptr = init(rom);
-
     const fb_ptr = get_framebuffer_ptr();
     const fb_u8 = new Uint8Array(o.memory.buffer, fb_ptr, 256 * 240 * 4);
-    // const framebuffer = new Uint32Array(256 * 240);
-    // const fb_u8 = new Uint8Array(framebuffer.buffer);
 
-    let last_time = performance.now();
+    const renderer = make_renderer();
+
+    let last_time = 0;
     let accum = 0;
-    let need_render = true;
     const target_ms = 1000 / 60;
 
     let player_buttons: [number, number] = [0, 0];
-    let b_button = ["k", "a"];
-    let a_button = ["l", "s"];
-    let select_button = ["i", "q"];
-    let start_button = ["o", "w"];
-    let up_button = ["ArrowUp", "t"];
-    let down_button = ["ArrowDown", "g"];
-    let left_button = ["ArrowLeft", "f"];
-    let right_button = ["ArrowRight", "h"];
+    const serialized_keys = JSON.parse(localStorage.getItem("keys") ?? "null");
+    const keys = serialized_keys ?? {
+        b_button: ["k", "a"],
+        a_button: ["l", "s"],
+        select_button: ["i", "q"],
+        start_button: ["o", "w"],
+        up_button: ["ArrowUp", "t"],
+        down_button: ["ArrowDown", "g"],
+        left_button: ["ArrowLeft", "f"],
+        right_button: ["ArrowRight", "h"],
+    };
 
     let osd_enabled = false;
 
+    const save = () => {
+        const save_data = save_state(nees_state_ptr);
+        localStorage.setItem(rom_path, save_data.reduce((acc, val) => acc + String.fromCharCode(val), ""));
+    };
+
+    const load = () => {
+        const save_data = localStorage.getItem(rom_path);
+        if (save_data) {
+            const save_data_u8 = new Uint8Array(save_data.length);
+            for (let i = 0; i < save_data.length; i++) {
+                save_data_u8[i] = save_data.charCodeAt(i);
+            }
+            load_state(nees_state_ptr, save_data_u8);
+        }
+    };
+
     window.addEventListener("keydown", (e) => {
         for (let i = 0; i < 2; i++) {
-            if (e.key === a_button[i]) {
+            if (e.key === keys.a_button[i]) {
                 player_buttons[i] |= 1 << 0;
-            } else if (e.key === b_button[i]) {
+            } else if (e.key === keys.b_button[i]) {
                 player_buttons[i] |= 1 << 1;
-            } else if (e.key === select_button[i]) {
+            } else if (e.key === keys.select_button[i]) {
                 player_buttons[i] |= 1 << 2;
-            } else if (e.key === start_button[i]) {
+            } else if (e.key === keys.start_button[i]) {
                 player_buttons[i] |= 1 << 3;
-            } else if (e.key === up_button[i]) {
+            } else if (e.key === keys.up_button[i]) {
                 player_buttons[i] |= 1 << 4;
-            } else if (e.key === down_button[i]) {
+            } else if (e.key === keys.down_button[i]) {
                 player_buttons[i] |= 1 << 5;
-            } else if (e.key === left_button[i]) {
+            } else if (e.key === keys.left_button[i]) {
                 player_buttons[i] |= 1 << 6;
-            } else if (e.key === right_button[i]) {
+            } else if (e.key === keys.right_button[i]) {
                 player_buttons[i] |= 1 << 7;
             }
+        }
+
+        if (e.key === "F2") {
+            e.preventDefault();
+            save();
+        } else if (e.key === "F3") {
+            e.preventDefault();
+            load();
         }
 
         if (e.key == "Escape") {
             e.preventDefault();
             osd_enabled = !osd_enabled;
- 
+
             if (osd_enabled) {
                 draw_osd(nees_state_ptr, fb_ptr);
             }
@@ -109,14 +138,23 @@ start_btn.onclick = async function () {
             else if (e.key == "ArrowDown") response = step_osd(nees_state_ptr, 1);
             else response = step_osd(nees_state_ptr, 2);
 
-            if (response.action === 1) b_button[response.which_player] = e.key;
-            else if (response.action === 2) a_button[response.which_player] = e.key;
-            else if (response.action === 3) select_button[response.which_player] = e.key;
-            else if (response.action === 4) start_button[response.which_player] = e.key;
-            else if (response.action === 5) up_button[response.which_player] = e.key;
-            else if (response.action === 6) down_button[response.which_player] = e.key;
-            else if (response.action === 7) left_button[response.which_player] = e.key;
-            else if (response.action === 8) right_button[response.which_player] = e.key;
+            if (response.action >= 1 && response.action <= 8) {
+                if (response.action === 1) keys.b_button[response.value] = e.key;
+                else if (response.action === 2) keys.a_button[response.value] = e.key;
+                else if (response.action === 3) keys.select_button[response.value] = e.key;
+                else if (response.action === 4) keys.start_button[response.value] = e.key;
+                else if (response.action === 5) keys.up_button[response.value] = e.key;
+                else if (response.action === 6) keys.down_button[response.value] = e.key;
+                else if (response.action === 7) keys.left_button[response.value] = e.key;
+                else if (response.action === 8) keys.right_button[response.value] = e.key;
+
+                localStorage.setItem("keys", JSON.stringify(keys));
+            }
+            else if (response.action === 9) { save(); osd_enabled = false; }
+            else if (response.action === 10) { load(); osd_enabled = false; }
+            else if (response.action === 11) {
+                renderer.set_horizontal_adjustment(response.value / 256);
+            }
 
             draw_osd(nees_state_ptr, fb_ptr);
         }
@@ -124,29 +162,28 @@ start_btn.onclick = async function () {
 
     window.addEventListener("keyup", (e) => {
         for (let i = 0; i < 2; i++) {
-            if (e.key === a_button[i]) {
+            if (e.key === keys.a_button[i]) {
                 player_buttons[i] &= ~(1 << 0);
-            } else if (e.key === b_button[i]) {
+            } else if (e.key === keys.b_button[i]) {
                 player_buttons[i] &= ~(1 << 1);
-            } else if (e.key === select_button[i]) {
+            } else if (e.key === keys.select_button[i]) {
                 player_buttons[i] &= ~(1 << 2);
-            } else if (e.key === start_button[i]) {
+            } else if (e.key === keys.start_button[i]) {
                 player_buttons[i] &= ~(1 << 3);
-            } else if (e.key === up_button[i]) {
+            } else if (e.key === keys.up_button[i]) {
                 player_buttons[i] &= ~(1 << 4);
-            } else if (e.key === down_button[i]) {
+            } else if (e.key === keys.down_button[i]) {
                 player_buttons[i] &= ~(1 << 5);
-            } else if (e.key === left_button[i]) {
+            } else if (e.key === keys.left_button[i]) {
                 player_buttons[i] &= ~(1 << 6);
-            } else if (e.key === right_button[i]) {
+            } else if (e.key === keys.right_button[i]) {
                 player_buttons[i] &= ~(1 << 7);
             }
         }
     });
 
-    (function render() {
+    (function render(now: DOMHighResTimeStamp) {
 
-        const now = performance.now();
         let delta = now - last_time;
         last_time = now;
 
@@ -191,17 +228,11 @@ start_btn.onclick = async function () {
             while (accum >= target_ms) {
                 tick(nees_state_ptr, fb_ptr, player_buttons[0], player_buttons[1]);
                 accum -= target_ms;
-                need_render = true;
             }
-        } else {
-            need_render = true;
         }
 
-        if (need_render) {
-            draw(fb_u8);
-            need_render = false;
-        }
+        renderer.draw(fb_u8);
 
         requestAnimationFrame(render);
-    })();
+    })(0);
 };

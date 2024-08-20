@@ -51,7 +51,7 @@ pub unsafe fn tick(
 #[wasm_bindgen]
 pub struct StepResponse {
     pub action: u8,
-    pub which_player: u8,
+    pub value: i16,
 }
 
 #[wasm_bindgen]
@@ -65,48 +65,51 @@ pub unsafe fn step_osd(state: *mut State, action: u8) -> StepResponse {
     }) {
         nees_osd::config_menu::StepResponse::None => StepResponse {
             action: 0,
-            which_player: 0,
+            value: 0,
         },
         nees_osd::config_menu::StepResponse::SetButtonB { which_player } => StepResponse {
             action: 1,
-            which_player,
+            value: which_player as i16,
         },
         nees_osd::config_menu::StepResponse::SetButtonA { which_player } => StepResponse {
             action: 2,
-            which_player,
+            value: which_player as i16,
         },
         nees_osd::config_menu::StepResponse::SetButtonSelect { which_player } => StepResponse {
             action: 3,
-            which_player,
+            value: which_player as i16,
         },
         nees_osd::config_menu::StepResponse::SetButtonStart { which_player } => StepResponse {
             action: 4,
-            which_player,
+            value: which_player as i16,
         },
         nees_osd::config_menu::StepResponse::SetButtonUp { which_player } => StepResponse {
             action: 5,
-            which_player,
+            value: which_player as i16,
         },
         nees_osd::config_menu::StepResponse::SetButtonDown { which_player } => StepResponse {
             action: 6,
-            which_player,
+            value: which_player as i16,
         },
         nees_osd::config_menu::StepResponse::SetButtonLeft { which_player } => StepResponse {
             action: 7,
-            which_player,
+            value: which_player as i16,
         },
         nees_osd::config_menu::StepResponse::SetButtonRight { which_player } => StepResponse {
             action: 8,
-            which_player,
+            value: which_player as i16,
         },
         nees_osd::config_menu::StepResponse::SaveState => StepResponse {
             action: 9,
-            which_player: 0,
+            value: 0,
         },
         nees_osd::config_menu::StepResponse::LoadState => StepResponse {
             action: 10,
-            which_player: 0,
+            value: 0,
         },
+        nees_osd::config_menu::StepResponse::HorizontalAdjustment(value) => {
+            StepResponse { action: 11, value }
+        }
     }
 }
 
@@ -115,4 +118,49 @@ pub unsafe fn draw_osd(state: *mut State, framebuffer_ptr: *mut u32) {
     let state = unsafe { state.as_mut().unwrap() };
     let framebuffer = unsafe { std::slice::from_raw_parts_mut(framebuffer_ptr, 256 * 240) };
     state.osd.draw_step(framebuffer);
+}
+
+#[wasm_bindgen]
+pub unsafe fn save_state(state: *const State) -> Vec<u8> {
+    let state = unsafe { state.as_ref().unwrap() };
+    let mut writer = SaveThing::new();
+    nees_std::save_state_buffer(&state.nes, &mut writer);
+    writer.0
+}
+
+
+#[wasm_bindgen]
+pub unsafe fn load_state(state: *mut State, buffer: &[u8]) {
+    let state = unsafe { state.as_mut().unwrap() };
+    let mut reader = SaveThing::from_buffer(buffer);
+    nees_std::load_state_buffer(&mut state.nes, &mut reader);
+}
+
+
+struct SaveThing(pub Vec<u8>);
+impl SaveThing {
+    fn new() -> Self {
+        Self(Vec::new())
+    }
+
+    fn from_buffer(buffer: &[u8]) -> Self {
+        Self(buffer.to_vec())
+    }
+}
+impl std::io::Write for SaveThing {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        self.0.extend_from_slice(buf);
+        Ok(buf.len())
+    }
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
+}
+impl std::io::Read for SaveThing {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        let len = std::cmp::min(buf.len(), self.0.len());
+        buf[..len].copy_from_slice(&self.0[..len]);
+        self.0 = self.0[len..].to_vec();
+        Ok(len)
+    }
 }
