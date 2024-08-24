@@ -3,6 +3,7 @@ name = "nees-wasm"
 version = "0.1.0"
 authors = ["r1sc <629669+r1sc@users.noreply.github.com>"]
 edition = "2018"
+license = "GPL3-0"
 
 [lib]
 crate-type = ["cdylib", "rlib"]

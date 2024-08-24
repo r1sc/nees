@@ -50,17 +50,6 @@ pub fn init(gl: &Context) {
 
         let texture = gl.create_texture().unwrap();
         gl.bind_texture(glow::TEXTURE_2D, Some(texture));
-        gl.tex_image_2d(
-            glow::TEXTURE_2D,
-            0,
-            glow::RGB as i32,
-            256,
-            240,
-            0,
-            glow::RGB,
-            glow::UNSIGNED_BYTE,
-            None,
-        );
         gl.tex_parameter_i32(
             glow::TEXTURE_2D,
             glow::TEXTURE_MIN_FILTER,
@@ -88,7 +77,7 @@ pub fn init(gl: &Context) {
             256,
             240,
             0,
-            glow::BGRA,
+            glow::RGBA,
             glow::UNSIGNED_BYTE,
             None,
         );
@@ -135,7 +124,7 @@ pub fn render(gl: &Context, framebuffer: &[u32]) {
             0,
             256,
             240,
-            glow::BGRA,
+            glow::RGBA,
             glow::UNSIGNED_BYTE,
             glow::PixelUnpackData::Slice(u8_pixels),
         );

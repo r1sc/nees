@@ -4,10 +4,6 @@ import wasm_path from "../pkg/nees_wasm_bg.wasm";
 
 // Get rom path from query string
 const rom_path = new URLSearchParams(window.location.search).get("rom");
-if (rom_path === null) {
-    alert("No rom path provided in query string");
-    throw new Error("No rom path provided in query string");
-}
 
 declare global {
     interface Window {
@@ -15,13 +11,41 @@ declare global {
     }
 }
 
-const start_btn = document.createElement("button");
-start_btn.textContent = "Click to start";
-document.body.appendChild(start_btn);
+async function get_rom_from_url(url: string) {
+    const response = await fetch(url);
+    const buffer = await response.arrayBuffer();
+    return new Uint8Array(buffer);
+}
 
-start_btn.onclick = async function () {
-    start_btn.remove();
+if (rom_path) {
+    const start_btn = document.createElement("button");
+    start_btn.textContent = "Click to start";
+    document.body.appendChild(start_btn);
+    start_btn.addEventListener("click", async () => {
+        start_btn.remove();
 
+        const rom = await get_rom_from_url(rom_path);
+
+        start(rom, rom_path);
+    });
+} else {
+    const file_input = document.createElement("input");
+    file_input.type = "file";
+    file_input.accept = ".nes";
+    file_input.textContent = "Select a .nes file";
+
+    document.body.appendChild(file_input);
+    file_input.addEventListener("change", async () => {
+        file_input.remove();
+
+        if (file_input.files && file_input.files.length > 0) {
+            const rom = new Uint8Array(await file_input.files[0].arrayBuffer());
+            start(rom, file_input.files[0].name);
+        }
+    });
+}
+
+async function start(rom: Uint8Array, rom_name: string) {
     const audio = new AudioContext({ sampleRate: 15720 });
     await audio.audioWorklet.addModule("nes-audio-processor.js");
     const audioNode = new AudioWorkletNode(audio, "nes-audio-processor", {
@@ -46,14 +70,6 @@ start_btn.onclick = async function () {
     }
 
     const o = await loadwasm();
-
-    async function get_rom_from_url(url: string) {
-        const response = await fetch(url);
-        const buffer = await response.arrayBuffer();
-        return new Uint8Array(buffer);
-    }
-
-    const rom = await get_rom_from_url(rom_path);
 
     const nees_state_ptr = init(rom);
     const fb_ptr = get_framebuffer_ptr();
@@ -82,11 +98,11 @@ start_btn.onclick = async function () {
 
     const save = () => {
         const save_data = save_state(nees_state_ptr);
-        localStorage.setItem(rom_path, save_data.reduce((acc, val) => acc + String.fromCharCode(val), ""));
+        localStorage.setItem(rom_name, save_data.reduce((acc, val) => acc + String.fromCharCode(val), ""));
     };
 
     const load = () => {
-        const save_data = localStorage.getItem(rom_path);
+        const save_data = localStorage.getItem(rom_name);
         if (save_data) {
             const save_data_u8 = new Uint8Array(save_data.length);
             for (let i = 0; i < save_data.length; i++) {
@@ -191,7 +207,7 @@ start_btn.onclick = async function () {
             delta = 500;
         }
 
-        const [gp1, gp2] = navigator.getGamepads();
+
         function set_buttons_down(gp: Gamepad, player_index: number) {
             player_buttons[player_index] = 0;
             if (gp.buttons[0].pressed) {
@@ -219,13 +235,16 @@ start_btn.onclick = async function () {
                 player_buttons[player_index] |= 1 << 7;
             }
         }
-        if (gp1) set_buttons_down(gp1, 0);
-        if (gp2) set_buttons_down(gp2, 1);
+
 
         if (!osd_enabled) {
             accum += delta;
 
             while (accum >= target_ms) {
+                const [gp1, gp2] = navigator.getGamepads();
+                if (gp1) set_buttons_down(gp1, 0);
+                if (gp2) set_buttons_down(gp2, 1);
+
                 tick(nees_state_ptr, fb_ptr, player_buttons[0], player_buttons[1]);
                 accum -= target_ms;
             }

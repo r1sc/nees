@@ -11,7 +11,7 @@ mod gamepad;
 mod platform;
 
 fn main() {
-    let rom_path = "roms/smb3.nes";
+    let rom_path = "roms/tmnt2.nes";
     let mut nes = nes001::NES001::from_rom(&std::fs::read(rom_path).unwrap());
 
     let mut controller_states: [ControllerState; 2] =

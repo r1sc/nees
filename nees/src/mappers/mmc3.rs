@@ -66,6 +66,7 @@ impl Cartridge for MMC3 {
         if (address & BIT_13) == BIT_13 {
             ciram[self.ppu_addr_to_ciram_addr(address) as usize]
         } else {
+            let num_1k_chunks = (self.ines.chr_rom_size_8kb_chunks as usize) * 8;
             let bank = match address {
                 0x0000..=0x3FF => self.chr_banks[0],
                 0x0400..=0x7FF => self.chr_banks[1],
@@ -76,8 +77,9 @@ impl Cartridge for MMC3 {
                 0x1800..=0x1BFF => self.chr_banks[6],
                 0x1C00..=0x1FFF => self.chr_banks[7],
                 _ => 0,
-            };
-            self.ines.chr_rom[(bank as usize) * 1024 + (address & 0x3FF) as usize]
+            } as usize & (num_1k_chunks - 1);
+
+            self.ines.chr_rom[bank * 1024 + (address & 0x3FF) as usize]
         }
     }
 
@@ -93,15 +95,16 @@ impl Cartridge for MMC3 {
         if address >= 0x6000 && address <= 0x7FFF {
             self.ram[(address & 0x1FFF) as usize]
         } else {
+            let num_8k_chunks = (self.ines.prg_rom_size_16k_chunks as usize) * 2;
             let bank = match address {
                 0x8000..=0x9FFF => self.prg_banks[0],
                 0xA000..=0xBFFF => self.prg_banks[1],
                 0xC000..=0xDFFF => self.prg_banks[2],
                 0xE000..=0xFFFF => self.prg_banks[3],
                 _ => 0,
-            };
+            } as usize & (num_8k_chunks - 1);
 
-            self.ines.prg_rom[(bank as usize) * 8192 + (address & 0x1FFF) as usize]
+            self.ines.prg_rom[bank * 8192 + (address & 0x1FFF) as usize]
         }
     }
 
@@ -117,38 +120,37 @@ impl Cartridge for MMC3 {
                 self.chr_a12_inversion = (value & 0x80) == 0x80;
             } else {
                 self.registers[self.bank_to_update as usize] = value;
-
-                if self.chr_a12_inversion {
-                    self.chr_banks[0] = self.registers[0];
-                    self.chr_banks[0] = self.registers[2];
-                    self.chr_banks[1] = self.registers[3];
-                    self.chr_banks[2] = self.registers[4];
-                    self.chr_banks[3] = self.registers[5];
-                    self.chr_banks[4] = self.registers[0] & 0xFE;
-                    self.chr_banks[5] = (self.registers[0] & 0xFE) + 1;
-                    self.chr_banks[6] = self.registers[1] & 0xFE;
-                    self.chr_banks[7] = (self.registers[1] & 0xFE) + 1;
-                } else {
-                    self.chr_banks[0] = self.registers[0] & 0xFE;
-                    self.chr_banks[1] = (self.registers[0] & 0xFE) + 1;
-                    self.chr_banks[2] = self.registers[1] & 0xFE;
-                    self.chr_banks[3] = (self.registers[1] & 0xFE) + 1;
-                    self.chr_banks[4] = self.registers[2];
-                    self.chr_banks[5] = self.registers[3];
-                    self.chr_banks[6] = self.registers[4];
-                    self.chr_banks[7] = self.registers[5];
-                }
-
-                let num_8k_prg_banks = self.ines.prg_rom_size_16k_chunks * 2;
-                if self.prg_rom_bank_mode {
-                    self.prg_banks[0] = num_8k_prg_banks - 2;
-                    self.prg_banks[2] = self.registers[6] & 0x3F;
-                } else {
-                    self.prg_banks[0] = self.registers[6] & 0x3F;
-                    self.prg_banks[2] = num_8k_prg_banks - 2;
-                }
-                self.prg_banks[1] = self.registers[7] & 0x3F;
             }
+            if self.chr_a12_inversion {
+                self.chr_banks[0] = self.registers[0];
+                self.chr_banks[0] = self.registers[2];
+                self.chr_banks[1] = self.registers[3];
+                self.chr_banks[2] = self.registers[4];
+                self.chr_banks[3] = self.registers[5];
+                self.chr_banks[4] = self.registers[0] & 0xFE;
+                self.chr_banks[5] = (self.registers[0] & 0xFE) + 1;
+                self.chr_banks[6] = self.registers[1] & 0xFE;
+                self.chr_banks[7] = (self.registers[1] & 0xFE) + 1;
+            } else {
+                self.chr_banks[0] = self.registers[0] & 0xFE;
+                self.chr_banks[1] = (self.registers[0] & 0xFE) + 1;
+                self.chr_banks[2] = self.registers[1] & 0xFE;
+                self.chr_banks[3] = (self.registers[1] & 0xFE) + 1;
+                self.chr_banks[4] = self.registers[2];
+                self.chr_banks[5] = self.registers[3];
+                self.chr_banks[6] = self.registers[4];
+                self.chr_banks[7] = self.registers[5];
+            }
+
+            let num_8k_prg_banks = self.ines.prg_rom_size_16k_chunks * 2;
+            if self.prg_rom_bank_mode {
+                self.prg_banks[0] = num_8k_prg_banks - 2;
+                self.prg_banks[2] = self.registers[6] & 0x3F;
+            } else {
+                self.prg_banks[0] = self.registers[6] & 0x3F;
+                self.prg_banks[2] = num_8k_prg_banks - 2;
+            }
+            self.prg_banks[1] = self.registers[7] & 0x3F;
         } else if address >= 0xA000 && address <= 0xBFFF {
             if address_even {
                 self.mirroring = value & 1;
