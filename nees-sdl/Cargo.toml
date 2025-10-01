@@ -10,5 +10,6 @@ license = "GPL3-0"
 nees = { path = "../nees" }
 nees-std = { path = "../nees-std" }
 nees-glrenderer = { path = "../nees-glrenderer" }
-sdl2 = { version = "0.37.0", features = ["bundled"] }
+nees-osd = { path = "../nees-osd" } 
+sdl2 = { version = "0.38.0" }
 glow = "0.14.0"

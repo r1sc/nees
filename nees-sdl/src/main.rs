@@ -1,6 +1,7 @@
-use std::{collections::VecDeque, os::raw::c_void};
+use std::{collections::VecDeque, fs::File, io::BufWriter, os::raw::c_void};
 
 use nees::nes001::{self, ControllerState};
+use nees_std::{load_state, save_state};
 use sdl2::{
     audio::{AudioCallback, AudioSpec, AudioSpecDesired},
     event::Event,
@@ -119,8 +120,7 @@ fn main() {
     let rom_path = "roms/punchout.nes";
     let mut nes = nes001::NES001::from_rom(&std::fs::read(rom_path).unwrap());
 
-    let mut player1_controller_state: ControllerState = ControllerState::new();
-    let mut player2_controller_state: ControllerState = ControllerState::new();
+    let mut player_controller_states = [ControllerState::new(), ControllerState::new()];
 
     let dt_target = std::time::Duration::from_micros(16666);
     let mut last_time = std::time::Instant::now();
@@ -131,8 +131,50 @@ fn main() {
 
     let mut framebuffer: Vec<u32> = vec![0; 256 * 240];
 
+    let mut osd = nees_osd::config_menu::OSD::new();
+    let mut osd_open = false;
+    let mut player_select_key = [Keycode::K, Keycode::Q];
+    let mut player_start_key = [Keycode::L, Keycode::W];
+    let mut player_b_key = [Keycode::Comma, Keycode::A];
+    let mut player_a_key = [Keycode::Period, Keycode::S];
+    let mut player_up_key = [Keycode::Up, Keycode::T];
+    let mut player_down_key = [Keycode::Down, Keycode::G];
+    let mut player_left_key = [Keycode::Left, Keycode::F];
+    let mut player_right_key = [Keycode::Right, Keycode::H];
+
     'l: loop {
         for event in sdl.event_pump().unwrap().poll_iter() {
+            let ev = match event {
+                Event::KeyDown {
+                    keycode: Some(key), ..
+                } => Some((key, true)),
+                Event::KeyUp {
+                    keycode: Some(key), ..
+                } => Some((key, false)),
+                _ => None,
+            };
+
+            if let Some((key, down)) = ev {
+                for (i, controller_state) in &mut player_controller_states.iter_mut().enumerate() {
+                    if key == player_a_key[i] {
+                        controller_state.set_a(down);
+                    } else if key == player_b_key[i] {
+                        controller_state.set_b(down);
+                    } else if key == player_down_key[i] {
+                        controller_state.set_down(down);
+                    } else if key == player_left_key[i] {
+                        controller_state.set_left(down);
+                    } else if key == player_right_key[i] {
+                        controller_state.set_right(down);
+                    } else if key == player_select_key[i] {
+                        controller_state.set_select(down);
+                    } else if key == player_start_key[i] {
+                        controller_state.set_start(down);
+                    } else if key == player_up_key[i] {
+                        controller_state.set_up(down);
+                    }
+                }
+            }
             match event {
                 Event::Quit { .. } => break 'l,
                 // Fill window resize event
@@ -140,71 +182,63 @@ fn main() {
                     win_event: sdl2::event::WindowEvent::Resized(width, height),
                     ..
                 } => nees_glrenderer::resize(&gl, width, height),
-                Event::KeyDown {
-                    keycode: Some(Keycode::Q),
-                    ..
-                } => player1_controller_state.set_select(true),
-                Event::KeyUp {
-                    keycode: Some(Keycode::Q),
-                    ..
-                } => player1_controller_state.set_select(false),
-                Event::KeyDown {
-                    keycode: Some(Keycode::W),
-                    ..
-                } => player1_controller_state.set_start(true),
-                Event::KeyUp {
-                    keycode: Some(Keycode::W),
-                    ..
-                } => player1_controller_state.set_start(false),
-                Event::KeyDown {
-                    keycode: Some(Keycode::A),
-                    ..
-                } => player1_controller_state.set_b(true),
-                Event::KeyUp {
-                    keycode: Some(Keycode::A),
-                    ..
-                } => player1_controller_state.set_b(false),
-                Event::KeyDown {
-                    keycode: Some(Keycode::S),
-                    ..
-                } => player1_controller_state.set_a(true),
-                Event::KeyUp {
-                    keycode: Some(Keycode::S),
-                    ..
-                } => player1_controller_state.set_a(false),
-                Event::KeyDown {
-                    keycode: Some(Keycode::Left),
-                    ..
-                } => player1_controller_state.set_left(true),
-                Event::KeyUp {
-                    keycode: Some(Keycode::Left),
-                    ..
-                } => player1_controller_state.set_left(false),
-                Event::KeyDown {
-                    keycode: Some(Keycode::Up),
-                    ..
-                } => player1_controller_state.set_up(true),
-                Event::KeyUp {
-                    keycode: Some(Keycode::Up),
-                    ..
-                } => player1_controller_state.set_up(false),
-                Event::KeyDown {
-                    keycode: Some(Keycode::Right),
-                    ..
-                } => player1_controller_state.set_right(true),
-                Event::KeyUp {
-                    keycode: Some(Keycode::Right),
-                    ..
-                } => player1_controller_state.set_right(false),
-                Event::KeyDown {
-                    keycode: Some(Keycode::Down),
-                    ..
-                } => player1_controller_state.set_down(true),
-                Event::KeyUp {
-                    keycode: Some(Keycode::Down),
-                    ..
-                } => player1_controller_state.set_down(false),
                 _ => {}
+            }
+
+            if let Event::KeyDown {
+                keycode: Some(key), ..
+            } = event
+            {
+                if key == Keycode::Escape {
+                    osd_open = !osd_open;
+                    osd.draw_step(&mut framebuffer);
+                } else if osd_open {
+                    let response = if key == Keycode::Up {
+                        osd.step(nees_osd::config_menu::OSDAction::Up)
+                    } else if key == Keycode::Down {
+                        osd.step(nees_osd::config_menu::OSDAction::Down)
+                    } else {
+                        osd.step(nees_osd::config_menu::OSDAction::Ok)
+                    };
+                    osd.draw_step(&mut framebuffer);
+
+                    match response {
+                        nees_osd::config_menu::StepResponse::None => {}
+                        nees_osd::config_menu::StepResponse::SetButtonA { which_player } => {
+                            player_a_key[which_player as usize] = key
+                        }
+                        nees_osd::config_menu::StepResponse::SetButtonB { which_player } => {
+                            player_b_key[which_player as usize] = key
+                        }
+                        nees_osd::config_menu::StepResponse::SetButtonSelect { which_player } => {
+                            player_select_key[which_player as usize] = key
+                        }
+                        nees_osd::config_menu::StepResponse::SetButtonStart { which_player } => {
+                            player_start_key[which_player as usize] = key
+                        }
+                        nees_osd::config_menu::StepResponse::SetButtonUp { which_player } => {
+                            player_up_key[which_player as usize] = key
+                        }
+                        nees_osd::config_menu::StepResponse::SetButtonDown { which_player } => {
+                            player_down_key[which_player as usize] = key
+                        }
+                        nees_osd::config_menu::StepResponse::SetButtonLeft { which_player } => {
+                            player_left_key[which_player as usize] = key
+                        }
+                        nees_osd::config_menu::StepResponse::SetButtonRight { which_player } => {
+                            player_right_key[which_player as usize] = key
+                        }
+                        nees_osd::config_menu::StepResponse::SaveState => {
+                            save_state(rom_path, &nes);
+                            osd_open = false;
+                        }
+                        nees_osd::config_menu::StepResponse::LoadState => {
+                            load_state(rom_path, &mut nes);
+                            osd_open = false;
+                        }
+                        nees_osd::config_menu::StepResponse::HorizontalAdjustment(_) => todo!(),
+                    }
+                }
             }
         }
 
@@ -217,25 +251,29 @@ fn main() {
             accum = std::time::Duration::ZERO;
         }
 
-        sec_accum += delta;
-        accum += delta;
+        if !osd_open {
+            sec_accum += delta;
+            accum += delta;
 
-        if sec_accum >= std::time::Duration::from_secs(1) {
-            let nes_fps = nes_frames;
-            nes_frames = 0;
-            sec_accum = std::time::Duration::ZERO;            
+            if sec_accum >= std::time::Duration::from_secs(1) {
+                let nes_fps = nes_frames;
+                nes_frames = 0;
+                sec_accum = std::time::Duration::ZERO;
 
-            window.set_title(format!("NES Emulator - FPS: {}", nes_fps).as_str()).unwrap();
-        }
+                window
+                    .set_title(format!("NES Emulator - FPS: {}", nes_fps).as_str())
+                    .unwrap();
+            }
 
-        while accum >= dt_target {
-            nes.set_buttons_down(0, &player1_controller_state);
-            nes.set_buttons_down(1, &player2_controller_state);
-            nes.tick_frame(&mut waveout_callback, &mut framebuffer);
+            while accum >= dt_target {
+                nes.set_buttons_down(0, &player_controller_states[0]);
+                nes.set_buttons_down(1, &player_controller_states[1]);
+                nes.tick_frame(&mut waveout_callback, &mut framebuffer);
 
-            accum -= dt_target;
+                accum -= dt_target;
 
-            nes_frames += 1;
+                nes_frames += 1;
+            }
         }
 
         nees_glrenderer::render(&gl, &framebuffer);
@@ -244,6 +282,4 @@ fn main() {
 
         std::thread::sleep(std::time::Duration::from_millis(1));
     }
-
-    println!("Hello, world!");
 }
